@@ -6,15 +6,20 @@ from torch import nn
 import torch
 from sklearn.metrics import r2_score
 from torch.utils.data import Dataset, DataLoader
-from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
+import joblib
+import os
 
 
 df = pd.read_table('D:\\github-project\\冷水机组模拟\\src\\chiller_train_datas1.txt')
 df = df.loc[:, ['负荷率', '冷却水进水温度', '冷却水出水温度', '冷冻水回水温度', '冷冻水出水温度', 'COP']]
 X, y = df.loc[:, ['负荷率', '冷却水进水温度', '冷却水出水温度', '冷冻水回水温度', '冷冻水出水温度']], df.loc[:, ['COP']]
 
-scaler = StandardScaler().fit(X)
+if os.path.exists('./scaler.joblib'):
+    scaler = joblib.load('./scaler.joblib')
+else:
+    scaler = StandardScaler().fit(X)
+    joblib.dump(scaler, './scaler.joblib')
 X = scaler.transform(X)
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -34,20 +39,26 @@ class MyDatasets(Dataset):
 class Model(nn.Module):
     def __init__(self):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(5, 256),
-            nn.ReLU(),
-            nn.BatchNorm1d(256),
-            nn.Dropout(0.4),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 1),
-        )
+        self.fc1 = nn.Linear(5, 256)
+        self.relu1 = nn.ReLU()
+        self.bn1 = nn.BatchNorm1d(256)
+        self.dropout = nn.Dropout(0.4)
+        self.fc2 = nn.Linear(256, 128)
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(128, 64)
+        self.relu3 = nn.ReLU()
+        self.fc4 = nn.Linear(64, 1)
     
     def forward(self, x):
-        x = self.net(x)
+        x = self.fc1(x)
+        x = self.relu1(x)
+        x = self.bn1(x)
+        x = self. dropout(x)
+        x = self.fc2(x)
+        x = self.relu2(x)
+        x = self.fc3(x)
+        x = self.relu3(x)
+        x = self.fc4(x)
         return x
 
 dataset_train = MyDatasets(X_train, y_train)
@@ -58,11 +69,15 @@ dataloader_test = DataLoader(dataset=dataset_test, batch_size=32)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-model = Model().to(device=device)
-for layer in model.modules():
-    if isinstance(layer, nn.Linear):
-        nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')
-        nn.init.constant_(layer.bias, 0)
+if os.path.exists('./model.joblib'):
+    model = joblib.load('./model.joblib')
+    model = model.to(device)
+else:
+    model = Model().to(device=device)
+    for layer in model.modules():
+        if isinstance(layer, nn.Linear):
+            nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')
+            nn.init.constant_(layer.bias, 0)
         
 loss_func = nn.MSELoss()
 optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=1e-5)
@@ -135,4 +150,6 @@ for epoch in range(300):
         writer.add_scalar('R2_score/test_r2', test_r2, epoch)
     scheduler.step(test_loss)
     print(f"Epoch {epoch}, train_loss: {train_loss}, test_loss: {test_loss}, test_r2: {test_r2}")
+# 保存模型
+joblib.dump(model, './model.joblib')
     
