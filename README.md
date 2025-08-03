@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# pytorch
-=======
 # HVAC-DT-EnergySim
 A digital twin-based central air conditioning system energy consumption simulation platform. It should enable hourly annual energy simulations and optimize design solutions/control strategies under full-year operating conditions.
 
@@ -87,4 +84,3 @@ A digital twin-based central air conditioning system energy consumption simulati
 ![水泵的功率vs流量曲线](./image/水泵的功率vs流量曲线.png)
 ### 4、水泵最大流量和最大/最小扬程曲线
 ![水泵最大流量和最大/最小扬程曲线](./image/最大流量和最大最小扬程曲线.png)
->>>>>>> 64c92bcb674848865df9fa21ca281d7dabfd12c2
