@@ -10,14 +10,14 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 
 
-df = pd.read_table('D:\\github-project\\冷水机组模拟\\src\\chiller_train_datas.txt')
-df = df.loc[:, ['tr_cw', 'G_cw', 'tr_chw', 'G_chw', 'load', 'P']]
-X, y = df.loc[:, ['tr_cw', 'G_cw', 'tr_chw', 'G_chw', 'load']], df.loc[:, ['P']]
+df = pd.read_table('D:\\github-project\\冷水机组模拟\\src\\chiller_train_datas1.txt')
+df = df.loc[:, ['负荷率', '冷却水进水温度', '冷却水出水温度', '冷冻水回水温度', '冷冻水出水温度', 'COP']]
+X, y = df.loc[:, ['负荷率', '冷却水进水温度', '冷却水出水温度', '冷冻水回水温度', '冷冻水出水温度']], df.loc[:, ['COP']]
 
 scaler = StandardScaler().fit(X)
 X = scaler.transform(X)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 class MyDatasets(Dataset):
     
@@ -34,39 +34,44 @@ class MyDatasets(Dataset):
 class Model(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(5, 32)
-        self.ln1 = nn.LayerNorm(32)
-        self.silu1 = nn.SiLU()
-        self.fc2 = nn.Linear(32, 64)
-        self.ln2 = nn.LayerNorm(64)
-        self.silu2 = nn.SiLU()
-        self.fc3 = nn.Linear(64, 128)
-        self.ln3 = nn.LayerNorm(128)
-        self.silu3 = nn.SiLU()
-        self.out = nn.Linear(128, 1)
+        self.net = nn.Sequential(
+            nn.Linear(5, 256),
+            nn.ReLU(),
+            nn.BatchNorm1d(256),
+            nn.Dropout(0.4),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1),
+        )
     
     def forward(self, x):
-        x = self.fc1(x)
-        x = self.ln1(x)
-        x = self.silu1(x)
-        x = self.fc2(x)
-        x = self.ln2(x)
-        x = self.silu2(x)
-        x = self.fc3(x)
-        x = self.ln3(x)
-        x = self.silu3(x)
-        x = self.out(x)
+        x = self.net(x)
         return x
 
 dataset_train = MyDatasets(X_train, y_train)
 dataset_test = MyDatasets(X_test, y_test)
 
-dataloader_train = DataLoader(dataset=dataset_train, batch_size=512, shuffle=True)
-dataloader_test = DataLoader(dataset=dataset_test, batch_size=512, shuffle=True)
+dataloader_train = DataLoader(dataset=dataset_train, batch_size=32, shuffle=True)
+dataloader_test = DataLoader(dataset=dataset_test, batch_size=32)
 
-model = Model()
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+model = Model().to(device=device)
+for layer in model.modules():
+    if isinstance(layer, nn.Linear):
+        nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')
+        nn.init.constant_(layer.bias, 0)
+        
 loss_func = nn.MSELoss()
-optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=0.01)
+optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=1e-5)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer=optimizer,
+    mode='min',
+    factor=0.5,
+    patience=10,
+)
 
 activations = {}
 
@@ -79,22 +84,23 @@ for layer_name, layer in model.named_children():
     hook = create_hook(layer_name)
     layer.register_forward_hook(hook)
  
-# 选择调度器（示例：StepLR）
-scheduler = StepLR(optimizer, step_size=50, gamma=0.1)  # 每5epoch学习率×0.1
 writer = SummaryWriter(log_dir='./runs')
- 
-for epoch in range(1000):
-    losses = []
-    r2s = []
+
+for epoch in range(300):
+    train_losses = []
+    train_r2s = []
+    model.train()
     for datas, labels in dataloader_train:
+        datas, labels = datas.to(device), labels.to(device)
         preds = model(datas)
-        loss = loss_func(preds, labels)
-        losses.append(loss.item())
-        r2 = r2_score(labels.detach().numpy(), preds.detach().numpy())
-        r2s.append(r2)
+        trainLoss = loss_func(preds, labels)
         optimizer.zero_grad() 
-        loss.backward() 
+        trainLoss.backward() 
         optimizer.step() 
+        
+        train_losses.append(trainLoss.item())
+        trainR2 = r2_score(labels.cpu().detach().numpy(), preds.cpu().detach().numpy())
+        train_r2s.append(trainR2)
         
         for key, val in activations.items():
             writer.add_histogram(f'Activation/{key}', val, epoch)
@@ -107,27 +113,26 @@ for epoch in range(1000):
             if param.grad is not None:
                 writer.add_histogram(f'Gradiant/{name}', param.grad, epoch)
         
-    train_loss = sum(losses) / len(losses)
+    train_loss = sum(train_losses) / len(train_losses)
     writer.add_scalar('Loss/train_loss', train_loss, epoch)
-    train_r2 = sum(r2s) / len(r2s)
+    train_r2 = sum(train_r2s) / len(train_r2s)
     writer.add_scalar('R2_score/train_r2', train_r2, epoch)
     
-    scheduler.step()   # 更新学习率（按epoch）
-    print(f"Epoch {epoch}, train_loss: {train_loss}, train_r2: {train_r2}, LR: {scheduler.get_last_lr()}") 
-    
+    model.eval()
     with torch.no_grad():
-        losses = []
-        r2s = []
+        test_losses = []
+        test_r2s = []
         for datas, labels in dataloader_test:
+            datas, labels = datas.to(device), labels.to(device)
             outs = model(datas)
-            loss = loss_func(outs, labels)
-            r2 = r2_score(labels.detach().numpy(), outs.detach().numpy())
-            losses.append(loss.item())
-            r2s.append(r2)
-        test_loss = sum(losses) / len(losses)
+            testLoss = loss_func(outs, labels)
+            testR2 = r2_score(labels.cpu().detach().numpy(), outs.cpu().detach().numpy())
+            test_losses.append(testLoss.item())
+            test_r2s.append(testR2)
+        test_loss = sum(test_losses) / len(test_losses)
         writer.add_scalar('Loss/test_loss', test_loss, epoch)
-        test_r2 = sum(r2s) / len(r2s)
+        test_r2 = sum(test_r2s) / len(test_r2s)
         writer.add_scalar('R2_score/test_r2', test_r2, epoch)
-        print(f"Epoch {epoch}, test_loss: {test_loss}, test_r2: {test_r2}")
-        print()
+    scheduler.step(test_loss)
+    print(f"Epoch {epoch}, train_loss: {train_loss}, test_loss: {test_loss}, test_r2: {test_r2}")
     
