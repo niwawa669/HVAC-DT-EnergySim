@@ -10,37 +10,44 @@ from sklearn.metrics import r2_score
 from torch.utils.data import Dataset, DataLoader
 from torch import optim
 from datetime import datetime
+import optuna
 
 # 初始化TensorBoard
 log_dir = f"logs/huber_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 writer = SummaryWriter(log_dir)
+
+def objective(trial):
+    params = {
+        'lr': trial.suggest_float('lr', 1e-5, 1e-2, log=True),
+        'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
+        'dropout_rate': trial.suggest_float('dropout_rate', 0.0, 0.5),
+        'hidden_dim1': trial.suggest_categorical('hidden_dim1', [32, 64, 128, 256]),
+        'hidden_dim2': trial.suggest_categorical('hidden_dim2', [64, 128, 256, 512]),
+        'delta': trial.suggest_float('delta', 0.5, 2.0)
+    }
 
 # 模型定义（添加记录钩子）
 class Model(nn.Module):
     def __init__(self, input_size, output_size):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Linear(input_size, 64),
-            nn.BatchNorm1d(64),
-            nn.Dropout(0.1),
+            nn.Linear(input_size, param['hidden_dim1']),
+            nn.LayerNorm(param['hidden_dim2']),
             nn.LeakyReLU(0.01),
             
-            nn.Linear(64, 128),
-            nn.BatchNorm1d(128),
-            nn.Dropout(0.1),
+            nn.Linear(param['hidden_dim1'], param['hidden_dim2']),
+            nn.LayerNorm(param['hidden_dim2']),
             nn.LeakyReLU(0.01),
             
-            nn.Linear(128, 256),
-            nn.BatchNorm1d(256),
-            nn.Dropout(0.1),
+            nn.Linear(param['hidden_dim1'], param['hidden_dim2']),
+            nn.LayerNorm(param['hidden_dim2']),
             nn.LeakyReLU(0.01),
             
-            nn.Linear(256, 512),
-            nn.BatchNorm1d(512),
-            nn.Dropout(0.1),
+            nn.Linear(param['hidden_dim1'], param['hidden_dim2']),
+            nn.LayerNorm(param['hidden_dim2']),
             nn.LeakyReLU(0.01),
             
-            nn.Linear(512, output_size)
+            nn.Linear(param['hidden_dim2'], output_size)
         )
         
         # 注册前向/反向钩子
@@ -102,7 +109,7 @@ test_loader = DataLoader(MyDataset(X_test, y_test), batch_size=512)
 # 模型配置
 model = Model(5, 1)
 loss_func = nn.HuberLoss(delta=1.0)
-optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0001)
+optimizer = optim.AdamW(model.parameters(), lr=param['lr'], weight_decay=0.0001)
 scheduler = StepLR(optimizer, step_size=300, gamma=0.5)
 
 # 训练循环
