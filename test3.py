@@ -40,8 +40,8 @@ class Model(nn.Module):
     def __init__(self):
         super().__init__()
         self.fc1 = nn.Linear(5, 256)
-        self.relu1 = nn.ReLU()
         self.bn1 = nn.BatchNorm1d(256)
+        self.relu1 = nn.ReLU()
         self.dropout = nn.Dropout(0.4)
         self.fc2 = nn.Linear(256, 128)
         self.relu2 = nn.ReLU()
@@ -51,8 +51,8 @@ class Model(nn.Module):
     
     def forward(self, x):
         x = self.fc1(x)
-        x = self.relu1(x)
         x = self.bn1(x)
+        x = self.relu1(x)
         x = self. dropout(x)
         x = self.fc2(x)
         x = self.relu2(x)
@@ -67,17 +67,18 @@ dataset_test = MyDatasets(X_test, y_test)
 dataloader_train = DataLoader(dataset=dataset_train, batch_size=32, shuffle=True)
 dataloader_test = DataLoader(dataset=dataset_test, batch_size=32)
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 if os.path.exists('./model.joblib'):
     model = joblib.load('./model.joblib')
-    model = model.to(device)
 else:
-    model = Model().to(device=device)
-    for layer in model.modules():
+    model = Model()
+
+model.to(device)
+for layer in model.modules():
         if isinstance(layer, nn.Linear):
             nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')
-            nn.init.constant_(layer.bias, 0)
+            nn.init.zeros_(layer.bias)
         
 loss_func = nn.MSELoss()
 optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=1e-5)
@@ -150,6 +151,8 @@ for epoch in range(300):
         writer.add_scalar('R2_score/test_r2', test_r2, epoch)
     scheduler.step(test_loss)
     print(f"Epoch {epoch}, train_loss: {train_loss}, test_loss: {test_loss}, test_r2: {test_r2}")
-# 保存模型
-joblib.dump(model, './model.joblib')
+    
+    # 保存模型
+    if epoch % 10 == 0 and epoch != 0:
+        joblib.dump(model, './model.joblib')
     
