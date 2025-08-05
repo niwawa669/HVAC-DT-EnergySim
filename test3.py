@@ -39,21 +39,21 @@ class MyDatasets(Dataset):
 class Model(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(5, 256)
-        self.bn1 = nn.BatchNorm1d(256)
-        self.relu1 = nn.ReLU()
+        self.fc1 = nn.Linear(5, 512)
+        self.bn1 = nn.BatchNorm1d(512)
         self.dropout = nn.Dropout(0.4)
-        self.fc2 = nn.Linear(256, 128)
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Linear(512, 256)
         self.relu2 = nn.ReLU()
-        self.fc3 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(256, 128)
         self.relu3 = nn.ReLU()
-        self.fc4 = nn.Linear(64, 1)
+        self.fc4 = nn.Linear(128, 1)
     
     def forward(self, x):
         x = self.fc1(x)
         x = self.bn1(x)
-        x = self.relu1(x)
         x = self. dropout(x)
+        x = self.relu1(x)
         x = self.fc2(x)
         x = self.relu2(x)
         x = self.fc3(x)
@@ -73,7 +73,6 @@ if os.path.exists('./model.joblib'):
     model = joblib.load('./model.joblib')
 else:
     model = Model()
-
 model.to(device)
 for layer in model.modules():
         if isinstance(layer, nn.Linear):
@@ -89,20 +88,20 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     patience=10,
 )
 
-activations = {}
+# activations = {}
 
-def create_hook(layer_name): # 闭包
-    def hook(module, input, output):
-        activations[layer_name] = output.detach().cpu()
-    return hook
+# def create_hook(layer_name): # 闭包
+#     def hook(module, input, output):
+#         activations[layer_name] = output.detach().cpu()
+#     return hook
 
-for layer_name, layer in model.named_children():
-    hook = create_hook(layer_name)
-    layer.register_forward_hook(hook)
+# for layer_name, layer in model.named_children():
+#     hook = create_hook(layer_name)
+#     layer.register_forward_hook(hook)
  
-writer = SummaryWriter(log_dir='./runs')
+# writer = SummaryWriter(log_dir='./runs')
 
-for epoch in range(300):
+for epoch in range(1000):
     train_losses = []
     train_r2s = []
     model.train()
@@ -118,21 +117,21 @@ for epoch in range(300):
         trainR2 = r2_score(labels.cpu().detach().numpy(), preds.cpu().detach().numpy())
         train_r2s.append(trainR2)
         
-        for key, val in activations.items():
-            writer.add_histogram(f'Activation/{key}', val, epoch)
-        activations.clear()
+        # for key, val in activations.items():
+        #     writer.add_histogram(f'Activation/{key}', val, epoch)
+        # activations.clear()
         
-        for name, param in model.named_parameters():
-            writer.add_histogram(f'Weight/{name}', param.data, epoch)
+        # for name, param in model.named_parameters():
+        #     writer.add_histogram(f'Weight/{name}', param.data, epoch)
         
-        for name, param in model.named_parameters():
-            if param.grad is not None:
-                writer.add_histogram(f'Gradiant/{name}', param.grad, epoch)
+        # for name, param in model.named_parameters():
+        #     if param.grad is not None:
+        #         writer.add_histogram(f'Gradiant/{name}', param.grad, epoch)
         
     train_loss = sum(train_losses) / len(train_losses)
-    writer.add_scalar('Loss/train_loss', train_loss, epoch)
-    train_r2 = sum(train_r2s) / len(train_r2s)
-    writer.add_scalar('R2_score/train_r2', train_r2, epoch)
+    # writer.add_scalar('Loss/train_loss', train_loss, epoch)
+    # train_r2 = sum(train_r2s) / len(train_r2s)
+    # writer.add_scalar('R2_score/train_r2', train_r2, epoch)
     
     model.eval()
     with torch.no_grad():
@@ -146,13 +145,13 @@ for epoch in range(300):
             test_losses.append(testLoss.item())
             test_r2s.append(testR2)
         test_loss = sum(test_losses) / len(test_losses)
-        writer.add_scalar('Loss/test_loss', test_loss, epoch)
+        # writer.add_scalar('Loss/test_loss', test_loss, epoch)
         test_r2 = sum(test_r2s) / len(test_r2s)
-        writer.add_scalar('R2_score/test_r2', test_r2, epoch)
+        # writer.add_scalar('R2_score/test_r2', test_r2, epoch)
     scheduler.step(test_loss)
     print(f"Epoch {epoch}, train_loss: {train_loss}, test_loss: {test_loss}, test_r2: {test_r2}")
     
-    # 保存模型
-    if epoch % 10 == 0 and epoch != 0:
-        joblib.dump(model, './model.joblib')
+# 保存模型
+model.cpu()
+joblib.dump(model, './model.joblib')
     
