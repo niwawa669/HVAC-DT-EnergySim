@@ -73,9 +73,9 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 def objective(trial:optuna.Trial):
     lr = trial.suggest_float('lr', 1e-5, 1e-1, log=True)
     weight_decay = trial.suggest_float('weight_decay', 1e-5, 1e-3, log=True)
-    batch_size = trial.suggest_int('batch_size', 16, 64)
+    batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
     prob_dropout = trial.suggest_float('prob_dropout', 0.1, 0.5)
-    hidden_size = trial.suggest_categorical('hidden_size', [128, 256, 512, 1024])
+    hidden_size = trial.suggest_categorical('hidden_size', [256, 512, 1024])
     
     model = Model(5, 1, hidden_size, prob_dropout)
     model.to(device)
@@ -138,9 +138,8 @@ def objective(trial:optuna.Trial):
     return test_loss
  
  
-study = optuna.create_study(direction='maximize', pruner=optuna.pruners.SuccessiveHalvingPruner()) 
+study = optuna.create_study(direction='minimize', pruner=optuna.pruners.SuccessiveHalvingPruner()) 
 study.optimize(objective,  n_trials=100)
 # 保存模型
 best_trial = study.best_trial
-best_model = best_trial.user_attrs['model']
-joblib.dump(best_model, './model.joblib')
+print(f'best_trial: {best_trial}, best_trial.user_attrs: {best_trial.user_attrs}, best_params: {best_trial.params}, best_value: {best_trial.value}')

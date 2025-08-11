@@ -41,7 +41,7 @@ class Model(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(5, 512)
         self.bn1 = nn.BatchNorm1d(512)
-        self.dropout = nn.Dropout(0.4)
+        self.dropout = nn.Dropout(0.37626)
         self.relu1 = nn.ReLU()
         self.fc2 = nn.Linear(512, 256)
         self.relu2 = nn.ReLU()
@@ -64,8 +64,8 @@ class Model(nn.Module):
 dataset_train = MyDatasets(X_train, y_train)
 dataset_test = MyDatasets(X_test, y_test)
 
-dataloader_train = DataLoader(dataset=dataset_train, batch_size=32, shuffle=True)
-dataloader_test = DataLoader(dataset=dataset_test, batch_size=32)
+dataloader_train = DataLoader(dataset=dataset_train, batch_size=64, shuffle=True)
+dataloader_test = DataLoader(dataset=dataset_test, batch_size=64)
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -80,7 +80,7 @@ for layer in model.modules():
             nn.init.zeros_(layer.bias)
         
 loss_func = nn.MSELoss()
-optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=1e-5)
+optimizer = torch.optim.AdamW(model.parameters(), lr=0.000651, weight_decay= 4.151e-05)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer=optimizer,
     mode='min',
