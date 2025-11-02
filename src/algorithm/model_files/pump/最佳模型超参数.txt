@@ -1,0 +1,8 @@
+best_params: {
+    'lr': 0.04492405411139753, 
+    'weight_decay': 0.0007631600655887981, 
+    'batch_size': 16, 
+    'prob_dropout': 0.14524069270443118, 
+    'hidden_size': 128
+}, 
+best_value: 0.7374688535928726
