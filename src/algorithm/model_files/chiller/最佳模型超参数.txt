@@ -1,7 +1,0 @@
-best_params: {
-    'lr': 0.0026741892461619246, 
-    'weight_decay': 0.0002802009030776563, 
-    'batch_size': 64, 
-    'prob_dropout': 0.4739141542755807, 
-    'hidden_size': 1024
-}, best_value: 0.022748874098646874

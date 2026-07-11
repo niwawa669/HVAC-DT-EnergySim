@@ -2,12 +2,12 @@ import pandas as pd
 import numpy as np
 from dataclasses import dataclass, field
 
-from .read_datas import read_buildingload_datas
+from .buildingload import CsvToDataframe
 
 
 @dataclass
 class Config:
-    file_path: str = ''  # 建筑冷负荷数据文件路径
+    file_path: str = 'buildingloads_adjusted.csv'  # 建筑冷负荷数据文件路径
 
     method_distribution: str = 'max'  # 按照最大释冷功率，'ratio'  # 按照释冷量与冷负荷的比例
 
@@ -31,18 +31,15 @@ class Config:
 
 class DistributingLoads:
 
-    def __init__(self, file_path):
-        self.df = read_buildingload_datas(file_path=file_path)
-        if '冷负荷' not in self.df.columns:
-            raise Exception('错误：冷负荷数据文件中的缺少“冷负荷”字段名.')
-        self.df['剩余蓄冷量(RTH)'] = 0.0
-        self.df['夜间冷机蓄冷量(kWh)'] = 0.0
-        self.df['白天释冷量(kWh)'] = 0.0
-        self.df['满足冷负荷需求校验(kWh)'] = 0.0
+    def __init__(self, file_path, start_date, end_date):
+        load_loader = CsvToDataframe(csv_path=file_path, date_column='datetime', date_format='%Y/%m/%d %H:%M')
+        self.df = load_loader.filter_by_datetime(start_datetime=start_date, end_datetime=end_date)
+        if self.df is None or self.df.empty:
+            raise Exception('加载建筑冷负荷数据失败，请检查文件路径及数据内容是否正确.')
 
         # 计算仿真周期的起始时间和结束时间
-        start_date = pd.Timestamp(self.df.index[0])
-        end_date = pd.Timestamp(self.df.index[-1])
+        start_date = self.df.iloc[0]['datetime']
+        end_date = self.df.iloc[-1]['datetime']
         self.st_month = start_date.month
         self.st_day = start_date.day
         self.ed_month = end_date.month
@@ -80,8 +77,11 @@ class DistributingLoads:
                 for day in range(st_day, ed_day + 1):
                     self.create_loads(month, day)
                     print(f'月/日：{month}/{day}，每天0点剩余蓄冷量(RTH)：{self.RTH_end}')
-        self.df.to_csv('./res.csv')
-        print('计算结果已保存在文件“./res.csv”中.')
+        if self.df is not None and not self.df.empty:
+            self.df.to_csv('./res.csv')
+            print('计算结果已保存在文件“./res.csv”中.')
+        else:
+            print('没有计算结果可保存.')
     
     def create_loads(self, month, day):
         loads = self.get_loads_one_day(month, day)
@@ -92,6 +92,8 @@ class DistributingLoads:
             sum_peak_loads=sum_peak_loads,
             sum_medium_loads=sum_medium_loads,
         )
+        if self.df is None or self.df.empty:
+            raise Exception('在create_loads()中，建筑冷负荷数据为空，无法保存计算结果.')
         df = self.df.loc[f'{self.year}-{month}-{day}']
         df.loc[:, '剩余蓄冷量(RTH)'] = RTHs_residual
         df.loc[:, '夜间冷机蓄冷量(kWh)'] = Qs_saved
@@ -156,6 +158,8 @@ class DistributingLoads:
 
     def get_loads_one_day(self, month, day):
         loads = []
+        if self.df is None or self.df.empty:
+            raise Exception('在get_loads_one_day()中，建筑冷负荷数据为空，无法获取当天负荷数据.')
         df = self.df.loc[f'{self.year}-{month}-{day}']
         for load in df.loc[:, '冷负荷']:
             loads.append(load)

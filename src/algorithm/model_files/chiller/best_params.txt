@@ -1,0 +1,7 @@
+best_params: {
+    'lr': 0.007023831400917929, 
+    'weight_decay': 0.0001372643017830914, 
+    'batch_size': 32, 
+    'hidden_size': 128
+}, 
+best_value: 564.1075844090918
