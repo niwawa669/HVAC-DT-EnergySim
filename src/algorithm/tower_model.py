@@ -1,45 +1,33 @@
-import joblib
+import numpy as np
 import torch
-from torch import nn
-
-
-class Model(nn.Module):
-    def __init__(self):
-        super().__init__()
-        hidden_size = 256
-        self.fc1 = nn.Linear(5, hidden_size)
-        self.bn1 = nn.BatchNorm1d(hidden_size)
-        self.dropout = nn.Dropout(0.15398408265073524)
-        self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, hidden_size//2)
-        self.relu2 = nn.ReLU()
-        self.fc3 = nn.Linear(hidden_size//2, hidden_size//4)
-        self.relu3 = nn.ReLU()
-        self.fc4 = nn.Linear(hidden_size//4, 2)
-    
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.bn1(x)
-        x = self. dropout(x)
-        x = self.relu1(x)
-        x = self.fc2(x)
-        x = self.relu2(x)
-        x = self.fc3(x)
-        x = self.relu3(x)
-        x = self.fc4(x)
-        return x
+from device_model import *
 
 
 class Tower:
     
-    def __init__(self, Gwr, Pr, t_dry_r=31.5, t_wet_r=28.0, tr_cw_r=32.0, 
-                 ts_cw_r=37.0, tr_cw_min=20.0, ratio_Hz_min=0.4, coe_efficience=0.85):
-        self.scaler = joblib.load('./model_files/tower/scaler.joblib')
+    def __init__(
+        self, 
+        Gw_r, 
+        P_r, 
+        t_dry_r=31.5, 
+        t_wet_r=28.0, 
+        tr_cw_r=32.0, 
+        ts_cw_r=37.0, 
+        tr_cw_min=20.0, 
+        ratio_Hz_min=0.4, 
+        coe_efficience=0.85
+    ):
         # 输入：'水流量', '进风干球温度', '进风湿球温度', '进水温度', '风量', 输出：'出水温度', '风机功率'
-        self.model = joblib.load('./model_files/tower/model.joblib')
+        self.model = Model(5, 2, 128)
+        model_file_path = './model_files/tower/model.pth'
+        if os.path.exists(model_file_path):
+            state_dict = torch.load(model_file_path, map_location="cpu", weights_only=False)
+            self.model.load_state_dict(state_dict)
+        else:
+            raise FileNotFoundError("model.pth 文件不存在")
         
-        self.Gwr = Gwr
-        self.Pr = Pr
+        self.Gwr = Gw_r
+        self.Pr = P_r
         self.t_dry_r = t_dry_r
         self.t_wet_r = t_wet_r
         self.tr_cw_r = tr_cw_r
@@ -47,8 +35,8 @@ class Tower:
         self.tr_cw_min = tr_cw_min
         self.ratio_Hz_min = ratio_Hz_min
         self.coe_efficience = coe_efficience
-        self.Gar = 58910.0
-        self.Ga_min = self.Gar * self.ratio_Hz_min
+        self.Ga_r = 58910.0
+        self.Ga_min = self.Ga_r * self.ratio_Hz_min
         
         self.P = 0
         self.Gw = 0
@@ -76,7 +64,6 @@ class Tower:
             self.tr_cw = self.ts_cw
         else:
             X = [[Gw, t_dry, t_wet, ts_cw, Ga]]
-            X = self.scaler.transform(X)
             datas = torch.tensor(X, dtype=torch.float32)
             res = self.model(datas)
             self.tr_cw, self.P = res[0]
@@ -109,8 +96,8 @@ class Tower:
 
 if __name__ == '__main__':
     tower = Tower(
-        Gwr=166.67,
-        Pr=22.0,
+        Gw_r=166.67,
+        P_r=22.0,
         t_dry_r=32.0,
         t_wet_r=28.0,
         tr_cw_r=32.0,
@@ -124,6 +111,6 @@ if __name__ == '__main__':
         t_dry=32.0, 
         t_wet=28.0, 
         ts_cw=37.0, 
-        Ga=tower.Gar
+        Ga=tower.Ga_r
     )
-    print(f'tr_cw: {tr_cw}, P: {P}, Gar: {tower.Gar}')
+    print(f'tr_cw: {tr_cw}, P: {P}, Ga_r: {tower.Ga_r}')
