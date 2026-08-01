@@ -1,9 +1,6 @@
 import os, sys
 from dataclasses import dataclass, field
-
-from chiller_model import Chiller
-from pump_model import Pump
-from tower_model import Tower
+from channel import Channel, ChannelInfo
 from airH2O import *
 from buildingload import CsvToDataframe
 
@@ -12,7 +9,7 @@ from buildingload import CsvToDataframe
 class StationInfo:
     # 建筑暖通设计参数：load = 196572kW / 26.6, t_dry_W = 31.7, da_w = 0.02347
     load_building_r: float = 196572.0 # 建筑负荷 kW
-    load_coe: float = 1.0 / 26.6 # 建筑负荷修正系数
+    load_coe: float = 1.0 / 26.58 # 建筑负荷修正系数
     coe: float = 1.0 / 1.2 # 系统能效修正系数
     coe_tower_efficience: float = 0.95 # 冷却塔风机效率缩放系数
     
@@ -68,22 +65,71 @@ class Station:
     def __init__(self, station_info: StationInfo):
         self.station_info = station_info
         
-        self.chiller_BCH = Chiller()
-        self.chiller_SCH = Chiller()
-        self.pump_chw_B = Pump()
-        self.pump_chw_S = Pump()
-        self.pump_cw_B = Pump()
-        self.pump_cw_S = Pump()
-        self.tower_B = Tower()
-        self.tower_S = Tower()
+        self.ratio_load_SCH = self.station_info.Qr_chiller_SCH / (self.station_info.Qr_chiller_BCH * 3 + self.station_info.Qr_chiller_SCH)
+        self.load_building_r_SCH = self.station_info.load_building_r * self.ratio_load_SCH
+        self.load_building_r_BCH = self.station_info.load_building_r * (1.0 - self.ratio_load_SCH)
+        self.channel_info_SCH = ChannelInfo(
+            load_building_r=self.load_building_r_SCH,
+            load_coe=1.0,
+            Qr_chiller=self.station_info.Qr_chiller_SCH,
+            n_design=self.station_info.n_design_SCH,
+            tr_cw_design=self.station_info.tr_cw_design_SCH,
+            ts_cw_design=self.station_info.ts_cw_design_SCH,
+            tr_cw_min=self.station_info.tr_cw_min,
+            ta_dry_W_r=self.station_info.ta_dry_r,
+            ta_wet_W_r=self.station_info.ta_wet_r,
+            load_up=self.station_info.load_up,
+            load_min=self.station_info.load_min,
+            delta_t_chw=self.station_info.delta_t_chw,
+            delta_t_cw=self.station_info.delta_t_cw,
+            ts_chw_set=self.station_info.ts_chw_set,
+            approach_set=self.station_info.approach_set,
+            Hr_pt=self.station_info.Hr_pt,
+            Hr_chiller_chw=self.station_info.Hr_chiller_chw_SCH,
+            Hr_chiller_cw=self.station_info.Hr_chiller_cw_SCH,
+            Hs_tower=self.station_info.Hs_tower_SCH,
+            Gr_chiller_chw=self.station_info.Gr_pump_chw_SCH,
+            Gr_chiller_cw=self.station_info.Gr_pump_cw_SCH,
+            Hr_pump_chw=self.station_info.Hr_pump_chw_SCH,
+            Hr_pump_cw=self.station_info.Hr_pump_cw_SCH,
+            Gr_tower=self.station_info.Gr_tower_SCH,
+            Pr_tower=self.station_info.Pr_tower_SCH,
+            ratio_Hz_min_pump=self.station_info.ratio_Hz_min_pump,
+            ratio_Hz_min_tower=self.station_info.ratio_Hz_min_tower,
+        )
+        self.channel_info_BCH = ChannelInfo(
+            load_building_r=self.load_building_r_BCH,
+            load_coe=1.0,
+            Qr_chiller=self.station_info.Qr_chiller_BCH,
+            n_design=self.station_info.n_design_BCH,
+            tr_cw_design=self.station_info.tr_cw_design_BCH,
+            ts_cw_design=self.station_info.ts_cw_design_BCH,
+            tr_cw_min=self.station_info.tr_cw_min,
+            ta_dry_W_r=self.station_info.ta_dry_r,
+            ta_wet_W_r=self.station_info.ta_wet_r,
+            load_up=self.station_info.load_up,
+            load_min=self.station_info.load_min,
+            delta_t_chw=self.station_info.delta_t_chw,
+            delta_t_cw=self.station_info.delta_t_cw,
+            ts_chw_set=self.station_info.ts_chw_set,
+            approach_set=self.station_info.approach_set,
+            Hr_pt=self.station_info.Hr_pt,
+            Hr_chiller_chw=self.station_info.Hr_chiller_chw_BCH,
+            Hr_chiller_cw=self.station_info.Hr_chiller_cw_BCH,
+            Hs_tower=self.station_info.Hs_tower_BCH,
+            Gr_chiller_chw=self.station_info.Gr_pump_chw_BCH,
+            Gr_chiller_cw=self.station_info.Gr_pump_cw_BCH,
+            Hr_pump_chw=self.station_info.Hr_pump_chw_BCH,
+            Hr_pump_cw=self.station_info.Hr_pump_cw_BCH,
+            Gr_tower=self.station_info.Gr_tower_BCH,
+            Pr_tower=self.station_info.Pr_tower_BCH,
+            ratio_Hz_min_pump=self.station_info.ratio_Hz_min_pump,
+            ratio_Hz_min_tower=self.station_info.ratio_Hz_min_tower,
+        )
+        self.channel_SCH = Channel(self.channel_info_SCH)
+        self.channel_BCH = Channel(self.channel_info_BCH)
         self.Qr_list = self.station_info.Qr_list
         self.n_design_list = self.station_info.n_design_list
-        self.channels = [
-            [self.chiller_SCH, self.pump_chw_S, self.pump_cw_S, self.tower_S],
-            [self.chiller_BCH, self.pump_chw_B, self.pump_cw_B, self.tower_B],
-        ]
-        self.get_S_pipes_chw()
-        self.get_S_pipes_cw()
         
         self.n_active_list = []
         self.Q_station = 0.0
@@ -94,7 +140,7 @@ class Station:
         self.P_towers = 0.0
         self.COP_chillers = 0.0
         self.EERs = 0.0
-        self.load_chillers = 0.0
+        self.load_chiller = 0.0
         self.tr_cw = 0.0
         self.ts_cw = 0.0
         self.ta_dry_W = 0.0
@@ -103,17 +149,13 @@ class Station:
         self.ratio_Ga = 1.0
         self.result = None
     
-    def __call__(self, load, ta_dry_W, da_W):
-        load *= self.station_info.load_coe
+    def __call__(self, load_building, ta_dry_W, da_W):
+        load_building *= self.station_info.load_coe
         self.ta_dry_W = ta_dry_W
         self.da_W = da_W
         self.ta_wet_W = td_b(ta_dry_W, da_W)
 
-        self.n_active_list = self.get_n_active_list(load)
-        Qr_station = 0
-        for i in range(len(self.n_design_list)):
-            Qr_station += self.Qr_list[i] * self.n_design_list[i]
-        
+        self.n_active_list = self.get_n_active_list(load_building)
         if sum(self.n_active_list) <= 0:
             self.Q_station = 0.0
             self.P_station = 0.0
@@ -123,73 +165,41 @@ class Station:
             self.P_towers = 0.0
             self.COP_chillers = 0.0
             self.EERs = 0.0
-            self.load_chillers = 0.0
         else:
-            self.Q_station = load
-            self.load_chillers = self.Q_station / Qr_station
+            self.Q_station = load_building
             self.ts_chw = self.station_info.ts_chw_set
             self.tr_chw = self.ts_chw + self.station_info.delta_t_chw
             self.Gw_chw  = self.Q_station / 4.187 / self.station_info.delta_t_chw
             
-            Gw_tr_cw = 0.0
-            self.Gw_cw = 0.0
-            tr_cw_min = self.ta_wet_W
-            tr_cw_tmp = 0.0
-            delta_tr_cw = 1.0
-            self.ratio_Ga = 1.0
-            while abs(delta_tr_cw) > 0.00001:
-                self.tr_cw = tr_cw_min + delta_tr_cw
-                if self.tr_cw < self.station_info.tr_cw_min:
-                    self.tr_cw = self.station_info.tr_cw_min
-                    self.ratio_Ga = 0.25
-                self.ts_cw = self.tr_cw + self.station_info.delta_t_cw
-                
-                self.P_station = 0.0
-                self.P_chillers = 0.0
-                self.P_pumps_chw = 0.0
-                self.P_pumps_cw = 0.0
-                self.P_towers = 0.0
-                Gw_tr_cw = 0.0
-                self.Gw_cw = 0.0
-                for channel, n_active in zip(self.channels, self.n_active_list):
-                    channel.append(n_active)
-                    P_channel, P_chiller, P_pump_chw, P_pump_cw, P_tower, tr_cw_tmp, Gw_cw = self.channel_count(*channel)
-                    self.P_station += P_channel
-                    self.P_chillers += P_chiller
-                    self.P_pumps_chw += P_pump_chw
-                    self.P_pumps_cw += P_pump_cw
-                    self.P_towers += P_tower
-                    self.Gw_cw += Gw_cw
-                    Gw_tr_cw += tr_cw_tmp * Gw_cw
-                if self.Gw_cw > 0:
-                    self.tr_cw = Gw_tr_cw / self.Gw_cw
-                else:
-                    self.tr_cw = self.ts_cw
-                if self.P_station > 0:
-                    self.EERs = self.Q_station / self.P_station
-                else:
-                    self.EERs = 0.0
-                if self.P_chillers > 0:
-                    self.COP_chillers = self.Q_station / self.P_chillers
-                else:
-                    self.COP_chillers = 0.0
-
-                approach = self.tr_cw - self.ta_wet_W
-                if approach > self.station_info.approach_set:
-                    self.ratio_Ga = 1.0
-                else:
-                    if self.tr_cw > self.station_info.tr_cw_min:
-                        self.ratio_Ga = approach / self.station_info.approach_set
-                    else:
-                        break
-                
-                if tr_cw_tmp > self.tr_cw:
-                    tr_cw_min = self.tr_cw
-                else:
-                    delta_tr_cw /= 2.0
+            load_building_SCH = load_building * self.ratio_load_SCH
+            self.channel_SCH(load_building_SCH, self.ta_dry_W, self.da_W, self.n_active_list[0])
+            load_building_Bch = load_building * (1.0 - self.ratio_load_SCH)
+            self.channel_BCH(load_building_Bch, self.ta_dry_W, self.da_W, self.n_active_list[1])
+            self.Gw_cw = self.channel_SCH.Gw_cw + self.channel_BCH.Gw_cw
+            if self.Gw_cw > 0:
+                self.tr_cw = (self.channel_SCH.Gw_cw * self.channel_SCH.tr_cw + \
+                    self.channel_BCH.Gw_cw * self.channel_BCH.tr_cw) / self.Gw_cw
+                self.ts_cw = (self.channel_SCH.Gw_cw * self.channel_SCH.ts_cw + \
+                    self.channel_BCH.Gw_cw * self.channel_BCH.ts_cw) / self.Gw_cw
+            else:
+                self.ts_cw = self.ta_wet_W
+                self.tr_cw = self.ts_cw
+            self.P_station = self.channel_SCH.P_channel + self.channel_BCH.P_channel
+            self.P_chillers = self.channel_SCH.P_chillers + self.channel_BCH.P_chillers
+            self.P_pumps_chw = self.channel_SCH.P_pumps_chw + self.channel_BCH.P_pumps_chw
+            self.P_pumps_cw = self.channel_SCH.P_pumps_cw + self.channel_BCH.P_pumps_cw
+            self.P_towers = self.channel_SCH.P_towers + self.channel_BCH.P_towers
+            if self.P_station > 0:
+                self.EERs = self.Q_station / self.P_station
+            else:
+                self.EERs = 0.0
+            if self.P_chillers > 0:
+                self.COP_chillers = self.Q_station / self.P_chillers
+            else:
+                self.COP_chillers = 0.0
             
             self.result = {
-                '冷负荷(kWh)': load,
+                '冷负荷(kWh)': load_building,
                 '制冷量(kWh)': self.Q_station,
                 '冷机耗电量(kWh)': self.P_chillers,
                 '冷冻泵耗电量(kWh)': self.P_pumps_chw,
@@ -199,50 +209,6 @@ class Station:
                 '冷站EERs': self.EERs,
             }
         return self.result
-    
-    def channel_count(self, chiller, pump_chw, pump_cw, tower, n_active):
-        P_channel = 0.0
-        P_chiller = 0.0
-        P_pump_chw = 0.0
-        P_pump_cw = 0.0
-        P_tower = 0.0
-        tr_cw = 0.0
-        Gw_cw = 0.0
-        if n_active > 0:
-            P_chiller = chiller(self.load_chillers, self.tr_cw, self.ts_cw, self.tr_chw, self.ts_chw)
-            Q = chiller.Q_r * self.load_chillers
-            Gw_chw = Q / 4.187 / self.station_info.delta_t_chw
-            P_pump_chw, _, _, _ = pump_chw(Gw_chw)
-            Gw_cw = (Q + P_chiller) / 4.187 / self.station_info.delta_t_cw
-            P_pump_cw, _, _, _ = pump_cw(Gw_cw)
-            Ga = tower.Ga_r * self.ratio_Ga
-            tr_cw, P_tower = tower(Gw_cw, self.ta_dry_W, self.ta_wet_W, self.tr_cw, self.ts_cw, Ga)
-            P_chiller *= n_active
-            P_pump_chw *= n_active
-            P_pump_cw *= n_active
-            P_tower *= n_active
-            P_channel = P_chiller + P_pump_chw + P_pump_cw + P_tower
-        else:
-            tr_cw = self.ts_cw
-        return P_channel, P_chiller, P_pump_chw, P_pump_cw, P_tower, tr_cw, Gw_cw
-    
-    def get_S_pipes_chw(self):
-        Hr_pipes_chw_B = self.station_info.Hr_pump_chw_BCH - self.station_info.Hr_chiller_chw_BCH - self.station_info.Hr_pt
-        Gr_chw_B = self.station_info.Gr_pump_chw_BCH * self.station_info.n_design_BCH
-        self.S_pipes_chw_BCH = Hr_pipes_chw_B / Gr_chw_B**2.0
-        
-        Hr_pipes_chw_S = self.station_info.Hr_pump_chw_SCH - self.station_info.Hr_chiller_chw_SCH - self.station_info.Hr_pt
-        Gr_chw_S = self.station_info.Gr_pump_chw_SCH * self.station_info.n_design_SCH
-        self.S_pipes_chw_SCH = Hr_pipes_chw_S / Gr_chw_S**2.0
-    
-    def get_S_pipes_cw(self):
-        Hr_pipes_cw_B = self.station_info.Hr_pump_cw_BCH - self.station_info.Hr_chiller_cw_BCH - self.station_info.Hs_tower_BCH
-        Gr_cw_B = self.station_info.Gr_pump_cw_BCH * self.station_info.n_design_BCH
-        self.S_pipes_cw_BCH = Hr_pipes_cw_B / Gr_cw_B**2.0
-        
-        Hr_pipes_cw_S = self.station_info.Hr_pump_cw_SCH - self.station_info.Hr_chiller_cw_SCH - self.station_info.Hs_tower_SCH
-        Gr_cw_S = self.station_info.Gr_pump_cw_SCH * self.station_info.n_design_SCH
-        self.S_pipes_cw_SCH = Hr_pipes_cw_S / Gr_cw_S**2.0
     
     def get_n_active_list(self, load):
         num = len(self.n_design_list)
@@ -255,8 +221,8 @@ class Station:
         for i in range(num):
             while self.n_active_list[num-i-1] > 0:
                 self.n_active_list[num-i-1] -= 1
-                Qr_active = self.get_Qr_active(self.n_active_list)
-                if load > Qr_active:
+                Q_loadup_active = self.get_Qr_active(self.n_active_list) * self.station_info.load_up
+                if load > Q_loadup_active:
                     self.n_active_list[num-i-1] += 1
                     break
         return self.n_active_list
@@ -265,7 +231,7 @@ class Station:
         Qr_active = 0.0
         for i in range(len(n_active_list)):
             Qr_active += self.Qr_list[i] * n_active_list[i]
-        return Qr_active * self.station_info.load_up
+        return Qr_active
 
 
 if __name__ == '__main__':
@@ -280,7 +246,7 @@ if __name__ == '__main__':
     res = station(load, t_dry_W, da_W)
     
     if res is not None:
-        print(f'冷负荷(kWh): {res["冷负荷(kWh)"]}')
+        print(f'冷负荷(kWh): {res['冷负荷(kWh)']/ChannelInfo.load_coe}')
         print(f'制冷量(kWh): {res["制冷量(kWh)"]}')
         print(f'冷机耗电量(kWh): {res["冷机耗电量(kWh)"]}')
         print(f'冷冻泵耗电量(kWh): {res["冷冻泵耗电量(kWh)"]}')

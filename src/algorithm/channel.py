@@ -43,8 +43,8 @@ class ChannelInfo:
     Gr_tower: float = 200.0 # 大机冷却塔设计流量 L/s 200.0L/s / 32.0℃/23.65℃ / 36.0℃/30.44℃ / 58910m^3/h / 22kW
     Pr_tower: float = 22.0 # 大机冷却塔设计功率 kW
     
-    ratio_Hz_min_pump = 30.0 / 50.0 # 冷却塔风机最小频率/最大频率
-    ratio_Hz_min_tower = 20.0 / 50.0 # 冷却塔风机最小频率/最大频率
+    ratio_Hz_min_pump: float = 30.0 / 50.0 # 冷却塔风机最小频率/最大频率
+    ratio_Hz_min_tower:float = 20.0 / 50.0 # 冷却塔风机最小频率/最大频率
     
     
 class Channel:
@@ -97,7 +97,7 @@ class Channel:
             self.load_chiller = 0.0
         else:
             self.Q_channel = load
-            self.load_chiller = self.Q_channel / (self.channel_info.Qr_chiller * self.channel_info.n_design)
+            self.load_chiller = self.Q_channel / (self.channel_info.Qr_chiller * self.n_active)
             self.ts_chw = self.channel_info.ts_chw_set
             self.tr_chw = self.ts_chw + self.channel_info.delta_t_chw
             self.Gw_chw  = self.Q_channel / 4.187 / self.channel_info.delta_t_chw
@@ -142,7 +142,7 @@ class Channel:
                     tr_cw_min = self.tr_cw
                 else:
                     delta_tr_cw /= 2.0
-        return self.P_channel, self.EERs_channel, self.COP_chillers
+        return self.P_channel, self.P_chillers, self.P_pumps_chw, self.P_pumps_cw, self.P_towers, self.tr_cw, self.Gw_cw
     
     def  hydraulic_calculation_chw(self, Gw_chw_chiller):
         self.H_chw_chiller = self.channel_info.Hr_chiller_chw * (Gw_chw_chiller / self.channel_info.Gr_chiller_chw)**2.0
