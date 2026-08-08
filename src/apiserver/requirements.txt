@@ -1,0 +1,37 @@
+# ===== Web 框架 =====
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+python-multipart==0.0.9
+
+# ===== 认证与安全 =====
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.1
+
+# ===== 数据库 =====
+sqlalchemy==2.0.34
+aiosqlite==0.20.0
+
+# ===== 科学计算（Python 3.13 支持） =====
+# 注意：numpy 1.26.x 和 pandas 2.1.x 支持 Python 3.13
+numpy==1.26.4
+pandas==2.2.2
+
+# ===== 异步任务 =====
+celery==5.4.0
+redis==5.0.8
+
+# ===== WebSocket =====
+websockets==13.1
+
+# ===== PDF 报告 =====
+weasyprint==61.2
+reportlab==4.2.2
+
+# ===== 数据验证 =====
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# ===== 工具 =====
+python-dateutil==2.9.0.post0
+pytz==2024.1
