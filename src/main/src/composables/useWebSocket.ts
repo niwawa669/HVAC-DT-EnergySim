@@ -59,7 +59,6 @@ export function useWebSocket(taskId: string) {
 
     try {
       const url = getWsUrl()
-      console.log('Connecting to WebSocket:', url)
       ws.value = new WebSocket(url)
 
       ws.value.onopen = () => {

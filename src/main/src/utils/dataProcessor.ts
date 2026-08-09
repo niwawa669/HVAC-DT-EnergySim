@@ -75,20 +75,8 @@ export function parseDataFile(content: string, delimiter: string = ','): ParseRe
     }
   }
 
-  // 检查是否有时间戳列
-  const timeColumn = headers.find(
-    (h) =>
-      h.includes('时间') ||
-      h.includes('time') ||
-      h.includes('日期') ||
-      h.includes('date') ||
-      h.includes('Time') ||
-      h.includes('Date'),
-  )
-
-  if (!timeColumn) {
-    errors.push('未找到时间戳列，请确保首列包含时间数据（列名包含"时间"、"日期"、"time"或"date"）')
-  }
+  // ===== 首列就是时间列 =====
+  const timeColumn = headers[0]
 
   // 解析数据行
   const data: Record<string, any>[] = []
@@ -97,7 +85,6 @@ export function parseDataFile(content: string, delimiter: string = ','): ParseRe
   for (let i = 1; i < lines.length; i++) {
     const values = lines[i].split(delimiter).map((v) => v.trim())
 
-    // 检查列数是否匹配
     if (values.length !== headers.length) {
       warnings.push(`第 ${i + 1} 行列数不匹配 (期望 ${headers.length}，实际 ${values.length})`)
       continue
@@ -106,13 +93,29 @@ export function parseDataFile(content: string, delimiter: string = ','): ParseRe
     const row: Record<string, any> = {}
     headers.forEach((header, index) => {
       const value = values[index] || ''
-      // 尝试转换为数字
-      const numValue = parseFloat(value)
-      row[header] = isNaN(numValue) ? value : numValue
+
+      // ===== 关键修复：如果是时间列（首列），保留字符串，不转换为数字 =====
+      if (index === 0) {
+        // 时间列保持为字符串
+        row[header] = value
+      } else {
+        // 其他列尝试转换为数字
+        const numValue = parseFloat(value)
+        row[header] = isNaN(numValue) ? value : numValue
+      }
     })
 
     data.push(row)
     rowCount++
+  }
+
+  // ===== 格式化时间列（首列） =====
+  if (timeColumn) {
+    data.forEach((row) => {
+      if (row[timeColumn] !== undefined && row[timeColumn] !== null && row[timeColumn] !== '') {
+        row[timeColumn] = smartFormatTimestamp(row[timeColumn])
+      }
+    })
   }
 
   // 预览数据（前10行）
@@ -127,6 +130,126 @@ export function parseDataFile(content: string, delimiter: string = ','): ParseRe
     warnings,
     errors,
   }
+}
+
+/**
+ * 智能格式化时间戳 - 专门处理您的格式
+ */
+export function smartFormatTimestamp(value: any): string {
+  if (!value && value !== 0) return ''
+
+  const str = String(value).trim()
+  if (!str) return ''
+
+  // ============================================
+  // 处理: 2025/1/1 0:00 或 2025/1/1 00:00
+  // 关键：小时可以是 0-23，分钟可以是 00-59
+  // ============================================
+  // 匹配格式: YYYY/M/D H:MM 或 YYYY/M/D HH:MM
+  const match1 = str.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})$/)
+  if (match1) {
+    const year = match1[1]
+    const month = String(match1[2]).padStart(2, '0')
+    const day = String(match1[3]).padStart(2, '0')
+    const hour = String(match1[4]).padStart(2, '0')
+    return `${year}-${month}-${day} ${hour}:00`
+  }
+
+  // ============================================
+  // 处理: 2025/1/1 (只有日期)
+  // ============================================
+  const match2 = str.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
+  if (match2) {
+    const year = match2[1]
+    const month = String(match2[2]).padStart(2, '0')
+    const day = String(match2[3]).padStart(2, '0')
+    return `${year}-${month}-${day} 00:00`
+  }
+
+  // ============================================
+  // 处理: 2025-01-01 00:00:00
+  // ============================================
+  const match3 = str.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/)
+  if (match3) {
+    return `${match3[1]}-${match3[2]}-${match3[3]} ${match3[4]}:00`
+  }
+
+  // ============================================
+  // 处理: 2025-01-01 00:00
+  // ============================================
+  const match4 = str.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/)
+  if (match4) {
+    return `${match4[1]}-${match4[2]}-${match4[3]} ${match4[4]}:00`
+  }
+
+  // ============================================
+  // 处理: 2025/08/01 00:00:00
+  // ============================================
+  const match5 = str.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/)
+  if (match5) {
+    return `${match5[1]}-${match5[2]}-${match5[3]} ${match5[4]}:00`
+  }
+
+  // ============================================
+  // 处理: 2025/08/01 00:00
+  // ============================================
+  const match6 = str.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})$/)
+  if (match6) {
+    return `${match6[1]}-${match6[2]}-${match6[3]} ${match6[4]}:00`
+  }
+
+  // ============================================
+  // 处理: 2025-08-01T00:00:00 (ISO)
+  // ============================================
+  const match7 = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
+  if (match7) {
+    return `${match7[1]}-${match7[2]}-${match7[3]} ${match7[4]}:00`
+  }
+
+  // ============================================
+  // 处理: 01/08/2025 00:00 (美式)
+  // ============================================
+  const match8 = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
+  if (match8) {
+    const month = String(match8[1]).padStart(2, '0')
+    const day = String(match8[2]).padStart(2, '0')
+    const year = match8[3]
+    const hour = String(match8[4]).padStart(2, '0')
+    return `${year}-${month}-${day} ${hour}:00`
+  }
+
+  // ============================================
+  // 使用 JavaScript Date 解析
+  // ============================================
+  try {
+    const date = new Date(str)
+    if (!isNaN(date.getTime()) && date.getFullYear() > 1970 && date.getFullYear() < 2100) {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hour = String(date.getHours()).padStart(2, '0')
+      return `${year}-${month}-${day} ${hour}:00`
+    }
+  } catch (e) {
+    // 忽略
+  }
+
+  return str
+}
+
+/**
+ * 格式化时间戳（兼容旧版本）
+ */
+export function formatTimestamp(value: any): string {
+  return smartFormatTimestamp(value)
+}
+
+/**
+ * 查找时间列 - 直接返回首列
+ */
+export function findTimeColumn(headers: string[]): string | null {
+  if (!headers || headers.length === 0) return null
+  return headers[0]
 }
 
 /**
@@ -149,71 +272,6 @@ export function detectDelimiter(content: string): string {
 }
 
 /**
- * 格式化时间戳（只保留日期和小时）
- */
-export function formatTimestamp(value: any): string {
-  if (!value) return ''
-
-  // 如果是数字（Excel 时间戳）
-  if (typeof value === 'number') {
-    // Excel 时间戳转换（从1900-01-01开始）
-    const excelEpoch = new Date(1899, 11, 30)
-    const date = new Date(excelEpoch.getTime() + value * 86400000)
-    return formatDateToHour(date)
-  }
-
-  // 如果是字符串
-  if (typeof value === 'string') {
-    // 尝试解析各种日期格式
-    const patterns = [
-      /(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}):(\d{2})/,
-      /(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2})/,
-      /(\d{1,2})[-/](\d{1,2})[-/](\d{4})\s+(\d{1,2}):(\d{2})/,
-      /(\d{1,2})[-/](\d{1,2})[-/](\d{4})\s+(\d{1,2})/,
-    ]
-
-    for (const pattern of patterns) {
-      const match = value.match(pattern)
-      if (match) {
-        let year, month, day, hour
-        if (match[1].length === 4) {
-          year = parseInt(match[1])
-          month = parseInt(match[2])
-          day = parseInt(match[3])
-          hour = parseInt(match[4] || '0')
-        } else {
-          year = parseInt(match[3])
-          month = parseInt(match[1])
-          day = parseInt(match[2])
-          hour = parseInt(match[4] || '0')
-        }
-        const date = new Date(year, month - 1, day, hour)
-        return formatDateToHour(date)
-      }
-    }
-
-    // 尝试直接解析
-    const date = new Date(value)
-    if (!isNaN(date.getTime())) {
-      return formatDateToHour(date)
-    }
-  }
-
-  return value
-}
-
-/**
- * 格式化日期为 "YYYY-MM-DD HH:00"
- */
-function formatDateToHour(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hour}:00`
-}
-
-/**
  * 校验时间序列数据
  */
 export function validateTimeSeriesWithErrors(
@@ -224,19 +282,28 @@ export function validateTimeSeriesWithErrors(
   const warnings: string[] = []
   const missingValues: Record<string, number> = {}
 
+  if (!data || data.length === 0) {
+    return {
+      isValid: false,
+      errors: [{ rowIndex: -1, column: '', value: null, message: '数据为空' }],
+      warnings: [],
+      summary: { totalRows: 0, validRows: 0, invalidRows: 0, missingValues: {} },
+    }
+  }
+
   // 检查数据量
   if (data.length !== 8760) {
     warnings.push(`数据行数为 ${data.length}，期望 8760 行（全年逐时数据）`)
   }
 
-  // 检查时间列
-  if (!timeColumn || !data[0]?.hasOwnProperty(timeColumn)) {
+  // ===== 检查时间列（首列） =====
+  if (!timeColumn) {
     errors.push({
       rowIndex: -1,
-      column: timeColumn || '时间戳',
+      column: '时间戳',
       value: null,
-      message: `时间列 "${timeColumn}" 不存在`,
-      suggestion: '请确保数据中包含名为"时间"、"日期"、"time"或"date"的列',
+      message: '未找到时间列',
+      suggestion: '请确保第一列为时间数据',
     })
     return {
       isValid: false,
@@ -260,34 +327,33 @@ export function validateTimeSeriesWithErrors(
 
     // 检查时间戳
     const timeValue = row[timeColumn]
-    if (!timeValue || timeValue === '' || timeValue === null) {
+    if (!timeValue && timeValue !== 0) {
       errors.push({
         rowIndex: index,
         column: timeColumn,
         value: timeValue,
         message: '时间戳为空',
-        suggestion: '请输入有效的时间',
+        suggestion: `${String(index + 1).padStart(4, '0')}-01-01 00:00`,
       })
       rowValid = false
     } else {
-      // 格式化时间戳
-      const formatted = formatTimestamp(timeValue)
-      if (formatted !== timeValue && typeof timeValue === 'string') {
-        // 自动修正时间格式
-        row[timeColumn] = formatted
-      }
-
-      // 验证时间格式是否正确
+      // 验证时间格式
       const timePattern = /^\d{4}-\d{2}-\d{2} \d{2}:00$/
-      if (!timePattern.test(row[timeColumn])) {
-        errors.push({
-          rowIndex: index,
-          column: timeColumn,
-          value: timeValue,
-          message: `时间格式不正确 (应为 "YYYY-MM-DD HH:00")`,
-          suggestion: formatTimestamp(timeValue),
-        })
-        rowValid = false
+      if (!timePattern.test(String(timeValue))) {
+        // 尝试自动修正
+        const formatted = smartFormatTimestamp(timeValue)
+        if (formatted !== String(timeValue) && timePattern.test(formatted)) {
+          row[timeColumn] = formatted
+        } else {
+          errors.push({
+            rowIndex: index,
+            column: timeColumn,
+            value: timeValue,
+            message: `时间格式不正确 (应为 "YYYY-MM-DD HH:00")`,
+            suggestion: smartFormatTimestamp(timeValue),
+          })
+          rowValid = false
+        }
       }
     }
 
@@ -308,23 +374,20 @@ export function validateTimeSeriesWithErrors(
           suggestion: 0,
         })
       } else if (typeof value === 'string' && isNaN(parseFloat(value))) {
-        errors.push({
-          rowIndex: index,
-          column: header,
-          value: value,
-          message: `"${value}" 不是有效数字`,
-          suggestion: 0,
-        })
-        rowValid = false
-      } else if (typeof value === 'number' && isNaN(value)) {
-        errors.push({
-          rowIndex: index,
-          column: header,
-          value: value,
-          message: '不是有效数字',
-          suggestion: 0,
-        })
-        rowValid = false
+        // 尝试转换
+        const numValue = parseFloat(value.replace(/,/g, ''))
+        if (!isNaN(numValue)) {
+          row[header] = numValue
+        } else {
+          errors.push({
+            rowIndex: index,
+            column: header,
+            value: value,
+            message: `"${value}" 不是有效数字`,
+            suggestion: 0,
+          })
+          rowValid = false
+        }
       }
     })
 
@@ -360,7 +423,6 @@ export function fillMissingValues(
   const headers = Object.keys(result[0] || {})
 
   headers.forEach((header) => {
-    // 检查是否包含缺失值
     const missingIndices: number[] = []
     result.forEach((row, index) => {
       const value = row[header]
@@ -371,7 +433,6 @@ export function fillMissingValues(
 
     if (missingIndices.length === 0) return
 
-    // 获取有效值
     const validValues: { index: number; value: number }[] = []
     result.forEach((row, index) => {
       if (!missingIndices.includes(index)) {
@@ -383,7 +444,6 @@ export function fillMissingValues(
     })
 
     if (validValues.length === 0) {
-      // 如果没有有效值，填充0
       missingIndices.forEach((idx) => {
         result[idx][header] = 0
       })
@@ -391,13 +451,11 @@ export function fillMissingValues(
     }
 
     if (method === 'mean') {
-      // 使用平均值填充
       const mean = validValues.reduce((sum, v) => sum + v.value, 0) / validValues.length
       missingIndices.forEach((idx) => {
         result[idx][header] = mean
       })
     } else if (method === 'forward') {
-      // 前向填充
       missingIndices.forEach((idx) => {
         const prev = validValues.filter((v) => v.index < idx)
         if (prev.length > 0) {
@@ -473,9 +531,8 @@ export function fixRowData(
     fixed[key] = fixes[key]
   })
 
-  // 如果修复了时间戳，重新格式化
   if (fixes[timeColumn]) {
-    fixed[timeColumn] = formatTimestamp(fixes[timeColumn])
+    fixed[timeColumn] = smartFormatTimestamp(fixes[timeColumn])
   }
 
   return fixed

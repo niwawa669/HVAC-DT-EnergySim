@@ -9,33 +9,70 @@ class DataService:
     
     def parse_data(self, content: str) -> Dict[str, Any]:
         """解析 CSV/TXT 数据"""
-        # 检测分隔符
-        delimiter = self._detect_delimiter(content)
         
-        # 使用 pandas 读取
-        df = pd.read_csv(
-            io.StringIO(content),
-            delimiter=delimiter,
-            encoding='utf-8'
-        )
+        # ===== 修复：检查内容是否为空 =====
+        if not content or not content.strip():
+            return {
+                "headers": [],
+                "rows": [],
+                "rowCount": 0,
+                "columnCount": 0,
+                "timeColumn": None,
+                "preview": [],
+                "warnings": ["文件内容为空"]
+            }
         
-        # 获取列名
-        headers = df.columns.tolist()
-        
-        # 转换为字典列表
-        rows = df.to_dict('records')
-        
-        # 检测时间列
-        time_column = self._find_time_column(headers)
-        
-        return {
-            "headers": headers,
-            "rows": rows,
-            "rowCount": len(df),
-            "columnCount": len(headers),
-            "timeColumn": time_column,
-            "preview": rows[:10]
-        }
+        try:
+            # 检测分隔符
+            delimiter = self._detect_delimiter(content)
+            
+            # 使用 pandas 读取
+            df = pd.read_csv(
+                io.StringIO(content),
+                delimiter=delimiter,
+                encoding='utf-8',
+                engine='python'  # 使用 Python 引擎，兼容性更好
+            )
+            
+            # 获取列名
+            headers = df.columns.tolist()
+            
+            # 转换为字典列表
+            rows = df.to_dict('records')
+            
+            # 检测时间列
+            time_column = self._find_time_column(headers)
+            
+            return {
+                "headers": headers,
+                "rows": rows,
+                "rowCount": len(df),
+                "columnCount": len(headers),
+                "timeColumn": time_column,
+                "preview": rows[:10],
+                "warnings": []
+            }
+            
+        except pd.errors.EmptyDataError:
+            return {
+                "headers": [],
+                "rows": [],
+                "rowCount": 0,
+                "columnCount": 0,
+                "timeColumn": None,
+                "preview": [],
+                "warnings": ["文件为空"]
+            }
+        except Exception as e:
+            return {
+                "headers": [],
+                "rows": [],
+                "rowCount": 0,
+                "columnCount": 0,
+                "timeColumn": None,
+                "preview": [],
+                "warnings": [f"解析错误: {str(e)}"]
+            }
     
     def validate_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """校验数据"""
@@ -83,7 +120,7 @@ class DataService:
                 else:
                     # 验证时间格式
                     formatted = self._format_timestamp(time_val)
-                    if formatted != time_val:
+                    if formatted != str(time_val):
                         errors.append({
                             "row": idx,
                             "column": time_column,
@@ -148,15 +185,21 @@ class DataService:
     
     def _find_time_column(self, headers: List[str]) -> str:
         """查找时间列"""
+        if not headers:
+            return ''
         time_keywords = ['时间', '日期', 'time', 'date', 'timestamp', '时刻']
         for header in headers:
-            if any(keyword in header.lower() for keyword in time_keywords):
+            header_lower = header.lower()
+            if any(keyword in header_lower for keyword in time_keywords):
                 return header
-        return None
+        return ''
     
     def _format_timestamp(self, value) -> str:
         """格式化时间戳"""
         value_str = str(value).strip()
+        
+        if not value_str:
+            return value_str
         
         # 尝试多种格式
         patterns = [
@@ -166,6 +209,10 @@ class DataService:
              lambda m: f"{m[1]}-{int(m[2]):02d}-{int(m[3]):02d} {int(m[4]):02d}:00"),
             (r'(\d{1,2})[-/](\d{1,2})[-/](\d{4})\s+(\d{1,2}):(\d{2})',
              lambda m: f"{m[3]}-{int(m[1]):02d}-{int(m[2]):02d} {int(m[4]):02d}:00"),
+            (r'(\d{1,2})[-/](\d{1,2})[-/](\d{4})\s+(\d{1,2})',
+             lambda m: f"{m[3]}-{int(m[1]):02d}-{int(m[2]):02d} {int(m[4]):02d}:00"),
+            (r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})',
+             lambda m: f"{m[1]}-{m[2]}-{m[3]} {m[4]}:00"),
         ]
         
         for pattern, formatter in patterns:

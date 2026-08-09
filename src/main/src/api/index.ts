@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useUserStore } from '@/stores/userStore'
+import { ElMessage } from 'element-plus'
 
 // API 基础配置
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
@@ -31,10 +32,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token 过期，跳转到登录页
       const userStore = useUserStore()
       userStore.logout()
+      ElMessage.error('登录已过期，请重新登录')
       window.location.href = '/login'
+    } else if (error.response?.status === 500) {
+      ElMessage.error('服务器错误，请稍后重试')
+    } else if (error.response?.data?.detail) {
+      ElMessage.error(error.response.data.detail)
+    } else {
+      ElMessage.error(error.message || '请求失败')
     }
     return Promise.reject(error)
   },

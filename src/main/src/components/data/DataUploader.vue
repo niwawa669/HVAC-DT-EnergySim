@@ -13,7 +13,7 @@
                 <div class="el-upload__tip">
                     <el-text size="small" type="info">
                         支持 .csv 和 .txt 格式<br>
-                        首列必须是时间戳（格式：YYYY-MM-DD HH:00），其他列必须为数值
+                        首列必须是时间戳（格式：YYYY-MM-DD HH:00 或 YYYY/MM/DD HH:00）
                     </el-text>
                 </div>
             </template>
@@ -27,6 +27,7 @@
                     <div class="parse-detail">
                         <span>数据行数: {{ parseResult.rowCount }}</span>
                         <span>列数: {{ parseResult.columnCount }}</span>
+                        <span>时间范围: {{ dataTimeRange }}</span>
                         <span v-if="parseResult.warnings.length > 0">
                             警告: {{ parseResult.warnings.length }} 条
                         </span>
@@ -35,25 +36,55 @@
             </el-alert>
         </div>
 
-        <!-- 数据预览表格 -->
-        <div v-if="previewData.length > 0" class="data-preview">
-            <div class="preview-header">
-                <span>数据预览 (前10行)</span>
-                <div class="preview-actions">
-                    <el-button size="small" @click="showFullData = !showFullData">
-                        {{ showFullData ? '收起' : '展开全部' }}
+        <!-- 时间范围选择和预览控制 -->
+        <div v-if="allData.length > 0" class="preview-controls">
+            <div class="controls-row">
+                <div class="time-range-selectors">
+                    <el-date-picker v-model="startTime" type="datetime" placeholder="选择开始时间" format="YYYY-MM-DD HH:00"
+                        value-format="YYYY-MM-DD HH:00" :disabled-date="disabledStartDate" style="width: 220px;" />
+                    <span style="margin: 0 10px; color: #909399;">至</span>
+                    <el-date-picker v-model="endTime" type="datetime" placeholder="选择结束时间" format="YYYY-MM-DD HH:00"
+                        value-format="YYYY-MM-DD HH:00" :disabled-date="disabledEndDate" style="width: 220px;" />
+                </div>
+                <div class="controls-actions">
+                    <el-button size="small" @click="resetTimeRange">重置范围</el-button>
+                    <el-button size="small" type="primary" :disabled="!canUpdatePreview" @click="updatePreviewData">
+                        <el-icon>
+                            <Refresh />
+                        </el-icon> 更新预览
                     </el-button>
-                    <el-button v-if="validationResult && !validationResult.isValid" size="small" type="warning"
-                        @click="showErrorTable = !showErrorTable">
-                        {{ showErrorTable ? '隐藏' : '查看' }}错误数据 ({{ validationResult.errors.length }})
-                    </el-button>
-                    <el-button size="small" type="primary" @click="handleDataConfirm">
+                    <el-button size="small" type="success" @click="handleDataConfirm" :disabled="!canConfirm">
                         确认数据
                     </el-button>
                 </div>
             </div>
+            <!-- 显示当前筛选结果 -->
+            <div class="filter-info" v-if="filteredData.length > 0">
+                当前显示: {{ filteredData.length }} / {{ allData.length }} 行
+                ({{ startTime }} ~ {{ endTime }})
+            </div>
+            <div class="filter-info" v-else>
+                暂无匹配数据，请调整时间范围
+            </div>
+        </div>
 
-            <el-table :data="displayData" border stripe max-height="400" style="width: 100%">
+        <!-- 数据预览表格 -->
+        <div v-if="displayData.length > 0" class="data-preview">
+            <div class="preview-header">
+                <span>
+                    数据预览
+                    <el-tag size="small" type="info">
+                        显示 {{ displayData.length }} / {{ allData.length }} 行
+                    </el-tag>
+                </span>
+                <div class="preview-actions">
+                    <el-button size="small" @click="showFullData = !showFullData">
+                        {{ showFullData ? '收起' : '展开全部' }}
+                    </el-button>
+                </div>
+            </div>
+
+            <el-table :data="displayData" border stripe max-height="400" style="width: 100%" v-loading="tableLoading">
                 <el-table-column v-for="col in displayHeaders" :key="col" :prop="col" :label="col" min-width="120"
                     :class-name="getColumnClass(col)">
                     <template #default="{ row }">
@@ -165,18 +196,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { UploadFilled, Refresh } from '@element-plus/icons-vue'
 import {
     parseDataFile,
     detectDelimiter,
     validateTimeSeriesWithErrors,
-    formatTimestamp,
-    fillMissingValues
+    smartFormatTimestamp,
+    fillMissingValues,
+    detectOutliers
 } from '@/utils/dataProcessor'
 
-// 类型定义
+// ===== 类型定义 =====
 interface ParseResult {
     headers: string[]
     data: Record<string, any>[]
@@ -207,58 +239,36 @@ interface ValidationResult {
     }
 }
 
-// Props
+// ===== Props & Emits =====
 const emit = defineEmits<{
     (e: 'data-confirmed', data: any): void
 }>()
 
-// State
+// ===== State =====
 const fileList = ref<any[]>([])
 const parseResult = ref<ParseResult | null>(null)
 const validationResult = ref<ValidationResult | null>(null)
-const showFullData = ref(false)
+const showFullData = ref(true)  // ✅ 默认展开全部
 const showErrorTable = ref(false)
-const rawContent = ref('')
 const workingData = ref<Record<string, any>[]>([])
+const tableLoading = ref(false)
 
-// Computed
-const previewData = computed(() => {
-    if (!parseResult.value) return []
-    return parseResult.value.previewData || []
-})
+// 时间范围
+const startTime = ref<string>('')
+const endTime = ref<string>('')
+const filteredData = ref<Record<string, any>[]>([])
+const allData = ref<Record<string, any>[]>([])
+const canUpdatePreview = ref(false)
+const isInitialized = ref(false)
 
-const displayData = computed(() => {
-    if (!parseResult.value) return []
-    // 如果有工作数据，使用工作数据
-    if (workingData.value.length > 0) {
-        return showFullData.value ? workingData.value : workingData.value.slice(0, 10)
-    }
-    return showFullData.value ? parseResult.value.data : parseResult.value.previewData
-})
-
-const displayHeaders = computed(() => {
-    if (!parseResult.value) return []
-    return parseResult.value.headers
-})
-
-const errorDataList = computed(() => {
-    if (!validationResult.value) return []
-    return validationResult.value.errors.map(err => ({
-        ...err,
-        suggestion: err.suggestion !== undefined && err.suggestion !== null ? err.suggestion : ''
-    }))
-})
-
-// Methods
-const getTimeColumn = () => {
+// ===== Computed =====
+const getTimeColumnName = () => {
     if (!parseResult.value) return ''
-    return parseResult.value.headers.find((h: string) =>
-        h.includes('时间') || h.includes('time') || h.includes('日期') || h.includes('date')
-    ) || ''
+    return parseResult.value.headers[0] || ''
 }
 
 const isTimeColumn = (col: string) => {
-    const timeCol = getTimeColumn()
+    const timeCol = getTimeColumnName()
     return col === timeCol
 }
 
@@ -277,20 +287,148 @@ const getCellStyle = (row: any, col: string) => {
     return {}
 }
 
+const displayHeaders = computed(() => {
+    if (!parseResult.value) return []
+    return parseResult.value.headers
+})
+
+const errorDataList = computed(() => {
+    if (!validationResult.value) return []
+    return validationResult.value.errors.map(err => ({
+        ...err,
+        suggestion: err.suggestion !== undefined && err.suggestion !== null ? err.suggestion : ''
+    }))
+})
+
+// ===== ✅ 显示数据 - 默认显示全部 =====
+const displayData = computed(() => {
+    const sourceData = filteredData.value.length > 0 ? filteredData.value : allData.value
+    if (showFullData.value) {
+        return sourceData
+    }
+    // 收起时显示10行
+    return sourceData.slice(0, 10)
+})
+
+const dataTimeRange = computed(() => {
+    if (allData.value.length === 0) return '无数据'
+    const timeCol = getTimeColumnName()
+    if (!timeCol) return '未检测到时间列'
+
+    const times = allData.value.map(row => row[timeCol]).filter(t => t)
+    if (times.length === 0) return '无有效时间'
+
+    const sorted = [...times].sort()
+    return `${sorted[0]} ~ ${sorted[sorted.length - 1]}`
+})
+
+const canConfirm = computed(() => {
+    return parseResult.value !== null &&
+        parseResult.value.errors.length === 0 &&
+        validationResult.value !== null &&
+        validationResult.value.isValid
+})
+
+// ===== 监听时间变化，启用更新按钮 =====
+watch([startTime, endTime], () => {
+    if (startTime.value && endTime.value && isInitialized.value) {
+        canUpdatePreview.value = true
+    }
+})
+
+// ===== 根据时间范围过滤数据 =====
+const filterDataByTimeRange = (start: string, end: string) => {
+    const timeCol = getTimeColumnName()
+    if (!timeCol || allData.value.length === 0) return
+
+    const startTimeMs = new Date(start).getTime()
+    const endTimeMs = new Date(end).getTime()
+
+    filteredData.value = allData.value.filter(row => {
+        const timeStr = row[timeCol]
+        if (!timeStr) return false
+        const time = new Date(timeStr).getTime()
+        return time >= startTimeMs && time <= endTimeMs
+    })
+
+    console.log(`筛选数据: ${filteredData.value.length} / ${allData.value.length} 行`)
+}
+
+// ===== 初始化时间范围（默认显示8月1日） =====
+const initializeTimeRange = () => {
+    const timeCol = getTimeColumnName()
+    if (!timeCol || allData.value.length === 0) return
+
+    const times = allData.value
+        .map(row => row[timeCol])
+        .filter(t => t && t !== '' && t !== null && t !== undefined && typeof t === 'string')
+
+    if (times.length === 0) return
+
+    const sorted = [...times].sort()
+
+    // ===== 查找8月1日的数据 =====
+    const targetDatePatterns = [
+        '2025-08-01', '2025/08/01', '2025-8-1', '2025/8/1',
+        '2024-08-01', '2024/08/01', '2024-8-1', '2024/8/1'
+    ]
+
+    let targetStartTime = null
+    let targetEndTime = null
+    let foundTargetDate = false
+
+    for (const pattern of targetDatePatterns) {
+        const matchingTimes = sorted.filter(t => t.startsWith(pattern))
+        if (matchingTimes.length > 0) {
+            targetStartTime = matchingTimes[0]
+            targetEndTime = matchingTimes[matchingTimes.length - 1]
+            foundTargetDate = true
+            break
+        }
+    }
+
+    if (!foundTargetDate) {
+        const firstDay = sorted[0]?.split(' ')[0]
+        if (firstDay) {
+            const firstDayTimes = sorted.filter(t => t.startsWith(firstDay))
+            if (firstDayTimes.length > 0) {
+                targetStartTime = firstDayTimes[0]
+                targetEndTime = firstDayTimes[firstDayTimes.length - 1]
+            }
+        }
+    }
+
+    if (!targetStartTime || !targetEndTime) {
+        targetStartTime = sorted[0]
+        targetEndTime = sorted[sorted.length - 1]
+    }
+
+    startTime.value = targetStartTime
+    endTime.value = targetEndTime
+
+    filterDataByTimeRange(targetStartTime, targetEndTime)
+
+    isInitialized.value = true
+    canUpdatePreview.value = false
+}
+
+// ===== Methods =====
 const handleFileUpload = (file: any) => {
     fileList.value.push(file)
 
-    // 重置状态
     workingData.value = []
+    allData.value = []
+    filteredData.value = []
     validationResult.value = null
     showErrorTable.value = false
+    startTime.value = ''
+    endTime.value = ''
+    canUpdatePreview.value = false
+    isInitialized.value = false
 
     const reader = new FileReader()
     reader.onload = (e: any) => {
         const content = e.target.result
-        rawContent.value = content
-
-        // 检测分隔符并解析
         const delimiter = detectDelimiter(content)
         const result = parseDataFile(content, delimiter)
         parseResult.value = result
@@ -298,27 +436,29 @@ const handleFileUpload = (file: any) => {
         if (result.errors.length === 0) {
             ElMessage.success(`成功解析 ${result.rowCount} 行数据`)
 
-            // 初始化工作数据
             workingData.value = result.data.map(row => ({ ...row }))
+            allData.value = result.data.map(row => ({ ...row }))
 
-            // 自动校验时间序列
-            const timeColumn = getTimeColumn()
+            const timeColumn = getTimeColumnName()
 
             if (timeColumn) {
-                // 先格式化时间戳
                 const formattedData = workingData.value.map(row => {
                     const newRow = { ...row }
                     if (newRow[timeColumn]) {
-                        newRow[timeColumn] = formatTimestamp(newRow[timeColumn])
+                        newRow[timeColumn] = smartFormatTimestamp(newRow[timeColumn])
                     }
                     return newRow
                 })
                 workingData.value = formattedData
+                allData.value = formattedData
+
+                nextTick(() => {
+                    initializeTimeRange()
+                })
 
                 const validation = validateTimeSeriesWithErrors(formattedData, timeColumn)
                 validationResult.value = validation
 
-                // 如果有错误，自动显示错误表格
                 if (validation.errors.length > 0) {
                     showErrorTable.value = true
                     ElMessage.warning(`发现 ${validation.errors.length} 个数据错误`)
@@ -326,7 +466,7 @@ const handleFileUpload = (file: any) => {
                     ElMessage.success('数据校验通过！')
                 }
             } else {
-                ElMessage.warning('未找到时间列，请确保列名包含"时间"、"日期"、"time"或"date"')
+                ElMessage.warning('未检测到时间列，请确保第一列为时间数据')
             }
         } else {
             ElMessage.error(`解析失败: ${result.errors.join(', ')}`)
@@ -335,8 +475,122 @@ const handleFileUpload = (file: any) => {
     reader.readAsText(file.raw)
 }
 
+const disabledStartDate = (time: Date) => {
+    if (!endTime.value) return false
+    const end = new Date(endTime.value)
+    return time.getTime() > end.getTime()
+}
+
+const disabledEndDate = (time: Date) => {
+    if (!startTime.value) return false
+    const start = new Date(startTime.value)
+    return time.getTime() < start.getTime()
+}
+
+const resetTimeRange = () => {
+    const timeCol = getTimeColumnName()
+    if (!timeCol || allData.value.length === 0) return
+
+    const times = allData.value
+        .map(row => row[timeCol])
+        .filter(t => t && t !== '' && t !== null && t !== undefined)
+        .sort()
+
+    if (times.length === 0) return
+
+    startTime.value = times[0]
+    endTime.value = times[times.length - 1]
+    canUpdatePreview.value = true
+}
+
+const updatePreviewData = () => {
+    if (!startTime.value || !endTime.value) {
+        ElMessage.warning('请选择完整的时间范围')
+        return
+    }
+
+    const timeCol = getTimeColumnName()
+    if (!timeCol) {
+        ElMessage.warning('未检测到时间列')
+        return
+    }
+
+    tableLoading.value = true
+
+    try {
+        filterDataByTimeRange(startTime.value, endTime.value)
+        ElMessage.success(`筛选完成，显示 ${filteredData.value.length} 行数据`)
+        canUpdatePreview.value = false
+    } catch (error) {
+        ElMessage.error('时间范围选择无效')
+    } finally {
+        tableLoading.value = false
+    }
+}
+
+const handleDataConfirm = () => {
+    if (!parseResult.value) {
+        ElMessage.warning('请先上传数据文件')
+        return
+    }
+
+    if (parseResult.value.errors.length > 0) {
+        ElMessage.warning('数据存在解析错误，请检查文件格式')
+        return
+    }
+
+    if (!validationResult.value) {
+        ElMessage.warning('请先进行数据校验')
+        return
+    }
+
+    const errors = validationResult.value.errors
+    if (errors.length > 0) {
+        ElMessageBox.confirm(
+            `数据中仍有 ${errors.length} 个错误未修正，确定要继续吗？`,
+            '警告',
+            {
+                confirmButtonText: '继续',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }
+        ).then(() => {
+            confirmData()
+        }).catch(() => { })
+        return
+    }
+
+    confirmData()
+}
+
+const confirmData = () => {
+    if (!parseResult.value || !workingData.value.length) return
+
+    const timeColumn = getTimeColumnName()
+    const numericColumns = parseResult.value.headers.filter((h: string) => h !== timeColumn)
+
+    const outliers: Record<string, number[]> = {}
+    numericColumns.forEach((col: string) => {
+        const result = detectOutliers(workingData.value, col)
+        if (result.length > 0) {
+            outliers[col] = result
+        }
+    })
+
+    if (Object.keys(outliers).length > 0) {
+        ElMessage.warning(`检测到 ${Object.keys(outliers).length} 列存在异常值`)
+    }
+
+    emit('data-confirmed', {
+        data: workingData.value,
+        headers: parseResult.value.headers,
+        outliers: outliers,
+        summary: validationResult.value?.summary
+    })
+}
+
+// ===== 错误处理函数 =====
 const handleSuggestionChange = (row: ValidationError) => {
-    // 更新建议值
     const error = validationResult.value?.errors.find(e =>
         e.rowIndex === row.rowIndex && e.column === row.column
     )
@@ -361,40 +615,42 @@ const applyFix = (row: ValidationError) => {
     const rowIndex = row.rowIndex
     const column = row.column
 
-    // 检查行索引是否有效
     if (rowIndex < 0 || rowIndex >= workingData.value.length) {
         ElMessage.error('无效的行索引')
         return
     }
 
-    // 验证修正值
     if (isTimeColumn(column)) {
-        // 时间列：验证格式
-        const formatted = formatTimestamp(fixValue)
+        const formatted = smartFormatTimestamp(fixValue)
         if (!formatted || !/^\d{4}-\d{2}-\d{2} \d{2}:00$/.test(formatted)) {
-            ElMessage.warning('时间格式应为 "YYYY-MM-DD HH:00"，例如：2024-01-01 00:00')
+            ElMessage.warning('时间格式应为 "YYYY-MM-DD HH:00"')
             return
         }
-        // 更新数据
         workingData.value[rowIndex][column] = formatted
+        allData.value[rowIndex][column] = formatted
+        const filteredIndex = filteredData.value.findIndex((_, idx) => idx === rowIndex)
+        if (filteredIndex !== -1) {
+            filteredData.value[filteredIndex][column] = formatted
+        }
     } else {
-        // 数值列：验证是否为数字
         const numValue = parseFloat(fixValue)
         if (isNaN(numValue)) {
             ElMessage.warning('请输入有效的数字')
             return
         }
-        // 更新数据
         workingData.value[rowIndex][column] = numValue
+        allData.value[rowIndex][column] = numValue
+        const filteredIndex = filteredData.value.findIndex((_, idx) => idx === rowIndex)
+        if (filteredIndex !== -1) {
+            filteredData.value[filteredIndex][column] = numValue
+        }
     }
 
-    // 重新校验
-    const timeColumn = getTimeColumn()
+    const timeColumn = getTimeColumnName()
     if (timeColumn) {
         const validation = validateTimeSeriesWithErrors(workingData.value, timeColumn)
         validationResult.value = validation
 
-        // 如果还有错误
         if (validation.errors.length > 0) {
             ElMessage.success(`已修正 1 个错误，剩余 ${validation.errors.length} 个`)
         } else {
@@ -434,22 +690,23 @@ const autoFixAll = () => {
             if (rowIndex < 0 || rowIndex >= workingData.value.length) return
 
             if (isTimeColumn(column)) {
-                const formatted = formatTimestamp(fixValue)
+                const formatted = smartFormatTimestamp(fixValue)
                 if (formatted && /^\d{4}-\d{2}-\d{2} \d{2}:00$/.test(formatted)) {
                     workingData.value[rowIndex][column] = formatted
+                    allData.value[rowIndex][column] = formatted
                     fixedCount++
                 }
             } else {
                 const numValue = parseFloat(fixValue)
                 if (!isNaN(numValue)) {
                     workingData.value[rowIndex][column] = numValue
+                    allData.value[rowIndex][column] = numValue
                     fixedCount++
                 }
             }
         })
 
-        // 重新校验
-        const timeColumn = getTimeColumn()
+        const timeColumn = getTimeColumnName()
         if (timeColumn) {
             const validation = validateTimeSeriesWithErrors(workingData.value, timeColumn)
             validationResult.value = validation
@@ -462,80 +719,6 @@ const autoFixAll = () => {
             }
         }
     }).catch(() => { })
-}
-
-const handleDataConfirm = () => {
-    if (!parseResult.value) {
-        ElMessage.warning('请先上传数据文件')
-        return
-    }
-
-    if (parseResult.value.errors.length > 0) {
-        ElMessage.warning('数据存在解析错误，请检查文件格式')
-        return
-    }
-
-    if (!validationResult.value) {
-        ElMessage.warning('请先进行数据校验')
-        return
-    }
-
-    // 检查是否有未修正的错误
-    const errors = validationResult.value.errors
-    if (errors.length > 0) {
-        ElMessageBox.confirm(
-            `数据中仍有 ${errors.length} 个错误未修正，确定要继续吗？`,
-            '警告',
-            {
-                confirmButtonText: '继续',
-                cancelButtonText: '取消',
-                type: 'warning'
-            }
-        ).then(() => {
-            confirmData()
-        }).catch(() => { })
-        return
-    }
-
-    confirmData()
-}
-
-const confirmData = () => {
-    if (!parseResult.value || !workingData.value.length) return
-
-    // 检测异常值
-    const timeColumn = getTimeColumn()
-    const numericColumns = parseResult.value.headers.filter((h: string) => h !== timeColumn)
-
-    const outliers: Record<string, number[]> = {}
-    numericColumns.forEach((col: string) => {
-        const values = workingData.value.map((row: any) => parseFloat(row[col])).filter((v: any) => !isNaN(v))
-        if (values.length > 3) {
-            const mean = values.reduce((a: any, b: any) => a + b, 0) / values.length
-            const std = Math.sqrt(values.reduce((a: any, b: any) => a + Math.pow(b - mean, 2), 0) / values.length)
-            if (std > 0) {
-                workingData.value.forEach((row: any, index: number) => {
-                    const val = parseFloat(row[col])
-                    if (!isNaN(val) && Math.abs(val - mean) > 3 * std) {
-                        if (!outliers[col]) outliers[col] = []
-                        outliers[col].push(index)
-                    }
-                })
-            }
-        }
-    })
-
-    if (Object.keys(outliers).length > 0) {
-        ElMessage.warning(`检测到 ${Object.keys(outliers).length} 列存在异常值`)
-    }
-
-    // 触发确认事件
-    emit('data-confirmed', {
-        data: workingData.value,
-        headers: parseResult.value.headers,
-        outliers: outliers,
-        summary: validationResult.value?.summary
-    })
 }
 </script>
 
@@ -558,6 +741,45 @@ const confirmData = () => {
     margin-top: 8px;
     font-size: 13px;
     color: #606266;
+    flex-wrap: wrap;
+}
+
+.preview-controls {
+    margin-top: 16px;
+    padding: 16px;
+    background: #f5f7fa;
+    border-radius: 8px;
+}
+
+.controls-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.time-range-selectors {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.controls-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-info {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #606266;
+    text-align: center;
+    background: #e8f0fe;
+    padding: 4px 12px;
+    border-radius: 4px;
 }
 
 .data-preview {
@@ -581,7 +803,6 @@ const confirmData = () => {
 .preview-actions {
     display: flex;
     gap: 8px;
-    flex-wrap: wrap;
 }
 
 .error-table {
@@ -603,5 +824,26 @@ const confirmData = () => {
 
 :deep(.el-table .cell) {
     word-break: break-all;
+}
+
+@media (max-width: 768px) {
+    .controls-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .time-range-selectors {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .time-range-selectors span {
+        text-align: center;
+        margin: 4px 0 !important;
+    }
+
+    .controls-actions {
+        justify-content: center;
+    }
 }
 </style>

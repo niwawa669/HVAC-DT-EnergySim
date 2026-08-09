@@ -8,8 +8,6 @@ export function mockSimulationData(taskId, onMessage) {
   let week = 0
   const totalWeeks = 52
 
-  console.log(`开始模拟仿真数据推送，taskId: ${taskId}`)
-
   const interval = setInterval(() => {
     week++
     if (week > totalWeeks) {
