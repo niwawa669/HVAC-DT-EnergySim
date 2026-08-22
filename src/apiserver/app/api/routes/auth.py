@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.security import OAuth2PasswordBearer
 from typing import Dict, Any
 
 from app.models.schemas import LoginRequest, TokenResponse
@@ -7,7 +6,6 @@ from app.core.security import create_access_token, verify_password, get_password
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 # 模拟用户数据库
 fake_users_db = {
@@ -46,7 +44,6 @@ async def login(request: LoginRequest):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 生成 Token
     access_token = create_access_token(
         data={"sub": user["username"], "role": user["role"]}
     )

@@ -25,8 +25,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 这里应该从数据库查询用户
-    # 模拟用户数据
     return {
         "id": 1,
         "username": username,

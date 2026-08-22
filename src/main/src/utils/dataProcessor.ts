@@ -490,7 +490,9 @@ export function fillMissingValues(
 }
 
 /**
- * 检测异常值（使用3σ原则）
+ * 检测异常值 - 使用99%置信区间方法
+ * 均值 ± 2.576 * 标准差 作为99%置信区间
+ * 超出此区间的数据点被标记为异常值
  */
 export function detectOutliers(data: Record<string, any>[], column: string): number[] {
   const values: number[] = []
@@ -503,13 +505,63 @@ export function detectOutliers(data: Record<string, any>[], column: string): num
 
   if (values.length < 3) return []
 
+  // 计算均值和标准差
   const mean = values.reduce((sum, v) => sum + v, 0) / values.length
   const std = Math.sqrt(values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length)
+
+  if (std === 0) return []
+
+  // 99%置信区间：均值 ± 2.576 * 标准差
+  const zScore = 2.576
+  const lowerBound = mean - zScore * std
+  const upperBound = mean + zScore * std
 
   const outliers: number[] = []
   data.forEach((row, index) => {
     const val = parseFloat(row[column])
-    if (!isNaN(val) && Math.abs(val - mean) > 3 * std) {
+    if (!isNaN(val) && (val < lowerBound || val > upperBound)) {
+      outliers.push(index)
+    }
+  })
+
+  return outliers
+}
+
+/**
+ * 检测异常值 - 使用IQR（四分位距）方法（备选）
+ * 更稳健的非参数方法，不依赖正态分布假设
+ */
+export function detectOutliersIQR(data: Record<string, any>[], column: string): number[] {
+  const values: number[] = []
+  data.forEach((row) => {
+    const val = parseFloat(row[column])
+    if (!isNaN(val)) {
+      values.push(val)
+    }
+  })
+
+  if (values.length < 4) return []
+
+  // 排序
+  const sorted = [...values].sort((a, b) => a - b)
+
+  // 计算Q1（25%分位数）和Q3（75%分位数）
+  const q1Index = Math.floor(sorted.length * 0.25)
+  const q3Index = Math.floor(sorted.length * 0.75)
+  const q1 = sorted[q1Index]
+  const q3 = sorted[q3Index]
+  const iqr = q3 - q1
+
+  if (iqr === 0) return []
+
+  // IQR方法：小于 Q1 - 1.5*IQR 或大于 Q3 + 1.5*IQR 的为异常值
+  const lowerBound = q1 - 1.5 * iqr
+  const upperBound = q3 + 1.5 * iqr
+
+  const outliers: number[] = []
+  data.forEach((row, index) => {
+    const val = parseFloat(row[column])
+    if (!isNaN(val) && (val < lowerBound || val > upperBound)) {
       outliers.push(index)
     }
   })

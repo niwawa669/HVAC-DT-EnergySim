@@ -1,14 +1,11 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-import os
+import json
 
 from app.config import settings
 from app.api.routes import auth, projects, upload, simulate, reports
-from app.websocket.manager import websocket_manager
 from app.services.simulation_service import simulation_service
 
-# 创建应用
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -24,42 +21,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
+# 注册 HTTP 路由
 app.include_router(auth.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(simulate.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 
-# WebSocket 端点
+# ===== WebSocket 端点 =====
 @app.websocket("/ws/simulate/{task_id}")
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
-    connection_id = None
+    """WebSocket 连接端点"""
+    print(f"🔗 WebSocket 连接请求: {task_id}")
+    
     try:
-        # 接受连接
-        connection_id = await websocket_manager.connect(task_id, websocket)
+        await websocket.accept()
+        print(f"✅ WebSocket 已接受: {task_id}")
         
-        # 等待消息循环
+        # 注册连接（即使 task_id 还没有仿真任务）
+        simulation_service.register_websocket(task_id, websocket)
+        print(f"📝 WebSocket 已注册: {task_id}")
+        
+        # 发送连接确认
+        await websocket.send_text(json.dumps({
+            "type": "connected",
+            "message": "WebSocket 连接成功",
+            "taskId": task_id
+        }))
+        print(f"📤 已发送连接确认: {task_id}")
+        
+        # 保持连接
         while True:
-            # 接收客户端消息（ping/pong）
             data = await websocket.receive_text()
             if data == "ping":
-                await websocket.send_text('{"type": "pong"}')
+                await websocket.send_text(json.dumps({"type": "pong"}))
                 
     except WebSocketDisconnect:
-        print(f"WebSocket 断开: {task_id}")
+        print(f"⚠️ WebSocket 断开: {task_id}")
     except Exception as e:
-        print(f"WebSocket 错误: {e}")
+        print(f"❌ WebSocket 错误: {e}")
     finally:
-        if connection_id:
-            websocket_manager.disconnect(connection_id)
+        simulation_service.unregister_websocket(task_id)
+        print(f"📝 WebSocket 已注销: {task_id}")
 
 # 健康检查
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": settings.APP_NAME}
 
-# 启动入口
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

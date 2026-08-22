@@ -2,7 +2,6 @@ import axios from 'axios'
 import { useUserStore } from '@/stores/userStore'
 import { ElMessage } from 'element-plus'
 
-// API 基础配置
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
 const api = axios.create({
@@ -13,10 +12,11 @@ const api = axios.create({
   },
 })
 
-// 请求拦截器：自动添加 Token
+// ===== 请求拦截器：自动添加 Token =====
 api.interceptors.request.use(
   (config) => {
     const userStore = useUserStore()
+    console.log('当前 Token:', userStore.token) // 调试日志
     if (userStore.token) {
       config.headers.Authorization = `Bearer ${userStore.token}`
     }
@@ -27,7 +27,7 @@ api.interceptors.request.use(
   },
 )
 
-// 响应拦截器：统一错误处理
+// ===== 响应拦截器：401 跳转登录 =====
 api.interceptors.response.use(
   (response) => response,
   (error) => {

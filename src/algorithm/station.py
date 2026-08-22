@@ -240,10 +240,10 @@ if __name__ == '__main__':
     t_dry_W = 31.7
     da_W = 0.02347
     
-    station_info = StationInfo()
+    station_info = StationInfo() # 仿真计算条件，包括暖通设计工况参数、设备设计参数和控制策略参数
     station = Station(station_info)
     
-    res = station(load, t_dry_W, da_W)
+    res = station(load, t_dry_W, da_W) # 仿真计算
     
     if res is not None:
         print(f'冷负荷(kWh): {res['冷负荷(kWh)']/ChannelInfo.load_coe}')

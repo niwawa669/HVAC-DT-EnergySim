@@ -8,6 +8,7 @@
                 </div>
             </template>
 
+            <!-- 步骤条 -->
             <el-steps :active="activeStep" finish-status="success" style="margin-bottom: 30px;">
                 <el-step title="上传数据" description="上传负荷和气象数据" />
                 <el-step title="参数配置" description="设置系统参数" />
@@ -36,10 +37,12 @@
                             controls-position="right" style="width: 100%;" />
                     </el-form-item>
 
+                    <!-- 数据预处理组件 -->
                     <el-form-item label="数据文件" required>
                         <DataUploader @data-confirmed="handleDataConfirmed" />
                     </el-form-item>
 
+                    <!-- 数据确认状态 -->
                     <el-form-item v-if="dataConfirmed">
                         <el-alert title="✅ 数据已确认" type="success" :closable="false" show-icon>
                             <template #default>
@@ -54,8 +57,100 @@
                         </el-alert>
                     </el-form-item>
 
+                    <!-- 调试信息 -->
+                    <el-form-item v-if="!dataConfirmed">
+                        <el-alert title="请确认数据" type="info" :closable="false" show-icon
+                            description='上传数据文件后，点击数据预览区域下方的"确认数据"按钮继续' />
+                    </el-form-item>
+
                     <el-form-item>
                         <el-button type="primary" @click="nextStep" :disabled="!canProceed">
+                            下一步
+                            <el-icon>
+                                <ArrowRight />
+                            </el-icon>
+                        </el-button>
+                        <!-- 调试信息 -->
+                        <span style="margin-left: 10px; font-size: 12px; color: #909399;">
+                            条件: 名称{{ !!projectForm.name ? '✅' : '❌' }} |
+                            建筑{{ !!projectForm.buildingType ? '✅' : '❌' }} |
+                            确认{{ dataConfirmed ? '✅' : '❌' }} |
+                            数据行数: {{ parsedData?.data?.length || 0 }}
+                        </span>
+                    </el-form-item>
+                </el-form>
+            </div>
+
+            <!-- Step 2: 参数配置 -->
+            <div v-show="activeStep === 1" class="step-content">
+                <el-form :model="configForm" label-width="180px">
+                    <el-divider content-position="left">空调系统</el-divider>
+
+                    <el-form-item label="系统类型" required>
+                        <el-select v-model="configForm.systemType" placeholder="请选择系统类型" style="width: 100%;">
+                            <el-option label="变风量系统 (VAV)" value="vav" />
+                            <el-option label="定风量系统 (CAV)" value="cav" />
+                            <el-option label="风机盘管系统 (FCU)" value="fcu" />
+                            <el-option label="多联机系统 (VRV)" value="vrv" />
+                        </el-select>
+                    </el-form-item>
+
+                    <el-form-item label="运行策略" required>
+                        <el-radio-group v-model="configForm.operationSchedule">
+                            <el-radio value="continuous">连续运行 (24/7)</el-radio>
+                            <el-radio value="intermittent">间歇运行 (8:00-18:00)</el-radio>
+                            <el-radio value="custom">自定义时间表</el-radio>
+                        </el-radio-group>
+                    </el-form-item>
+
+                    <el-form-item v-if="configForm.operationSchedule === 'custom'" label="运行时间">
+                        <el-time-picker v-model="configForm.startTime" placeholder="开始时间" format="HH:mm"
+                            value-format="HH:mm" />
+                        <el-time-picker v-model="configForm.endTime" placeholder="结束时间" format="HH:mm"
+                            value-format="HH:mm" style="margin-left: 10px;" />
+                    </el-form-item>
+
+                    <el-divider content-position="left">室内参数</el-divider>
+
+                    <el-form-item label="夏季设定温度 (°C)">
+                        <el-input-number v-model="configForm.coolingSetpoint" :min="20" :max="28" :step="0.5"
+                            controls-position="right" />
+                        <span style="margin-left: 10px; color: #909399;">推荐: 26°C</span>
+                    </el-form-item>
+
+                    <el-form-item label="冬季设定温度 (°C)">
+                        <el-input-number v-model="configForm.heatingSetpoint" :min="16" :max="24" :step="0.5"
+                            controls-position="right" />
+                        <span style="margin-left: 10px; color: #909399;">推荐: 20°C</span>
+                    </el-form-item>
+
+                    <el-divider content-position="left">建筑参数</el-divider>
+
+                    <el-form-item label="人员密度 (人/m²)">
+                        <el-input-number v-model="configForm.occupancyDensity" :min="0.05" :max="0.5" :step="0.05"
+                            controls-position="right" />
+                        <span style="margin-left: 10px; color: #909399;">办公: 0.1</span>
+                    </el-form-item>
+
+                    <el-form-item label="照明功率密度 (W/m²)">
+                        <el-input-number v-model="configForm.lightingPowerDensity" :min="5" :max="20"
+                            controls-position="right" />
+                        <span style="margin-left: 10px; color: #909399;">办公: 10</span>
+                    </el-form-item>
+
+                    <el-form-item label="设备功率密度 (W/m²)">
+                        <el-input-number v-model="configForm.equipmentPowerDensity" :min="5" :max="50"
+                            controls-position="right" />
+                        <span style="margin-left: 10px; color: #909399;">办公: 15</span>
+                    </el-form-item>
+
+                    <el-form-item>
+                        <el-button @click="prevStep">
+                            <el-icon>
+                                <ArrowLeft />
+                            </el-icon> 上一步
+                        </el-button>
+                        <el-button type="primary" @click="nextStep">
                             下一步
                             <el-icon>
                                 <ArrowRight />
@@ -65,14 +160,40 @@
                 </el-form>
             </div>
 
-            <!-- Step 2: 参数配置 -->
-            <div v-show="activeStep === 1" class="step-content">
-                <!-- ... 参数配置内容不变 ... -->
-            </div>
-
             <!-- Step 3: 启动仿真 -->
             <div v-show="activeStep === 2" class="step-content">
-                <!-- ... 确认内容不变 ... -->
+                <el-alert title="配置确认" type="success" :closable="false" style="margin-bottom: 20px;">
+                    <template #default>
+                        <div class="config-summary">
+                            <el-descriptions :column="2" border>
+                                <el-descriptions-item label="项目名称">{{ projectForm.name || '未命名'
+                                    }}</el-descriptions-item>
+                                <el-descriptions-item label="建筑类型">{{ getBuildingTypeLabel(projectForm.buildingType)
+                                    }}</el-descriptions-item>
+                                <el-descriptions-item label="建筑面积">{{ projectForm.area || 0 }} m²</el-descriptions-item>
+                                <el-descriptions-item label="系统类型">{{ getSystemTypeLabel(configForm.systemType)
+                                    }}</el-descriptions-item>
+                                <el-descriptions-item label="运行策略">{{ getScheduleLabel(configForm.operationSchedule)
+                                    }}</el-descriptions-item>
+                                <el-descriptions-item label="夏季设定温度">{{ configForm.coolingSetpoint
+                                    }}°C</el-descriptions-item>
+                                <el-descriptions-item label="冬季设定温度">{{ configForm.heatingSetpoint
+                                    }}°C</el-descriptions-item>
+                                <el-descriptions-item label="人员密度">{{ configForm.occupancyDensity }}
+                                    人/m²</el-descriptions-item>
+                                <el-descriptions-item label="照明功率密度">{{ configForm.lightingPowerDensity }}
+                                    W/m²</el-descriptions-item>
+                                <el-descriptions-item label="设备功率密度">{{ configForm.equipmentPowerDensity }}
+                                    W/m²</el-descriptions-item>
+                                <el-descriptions-item label="数据行数">{{ parsedData?.data?.length || 0
+                                    }}</el-descriptions-item>
+                                <el-descriptions-item label="数据列数">{{ parsedData?.headers?.length || 0
+                                    }}</el-descriptions-item>
+                            </el-descriptions>
+                        </div>
+                    </template>
+                </el-alert>
+
                 <div class="action-buttons">
                     <el-button @click="prevStep">
                         <el-icon>
@@ -93,12 +214,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, ArrowLeft, VideoPlay } from '@element-plus/icons-vue'
 import DataUploader from '@/components/data/DataUploader.vue'
-// ===== 修复：重命名导入的 API 函数 =====
 import { startSimulation as startSimulationAPI } from '@/api/simulation'
 
 const router = useRouter()
@@ -131,32 +251,58 @@ const configForm = reactive({
 
 // ===== 计算属性 =====
 const canProceed = computed(() => {
-    return !!projectForm.name &&
+    const result = !!projectForm.name &&
         !!projectForm.buildingType &&
         dataConfirmed.value === true &&
         parsedData.value !== null &&
         parsedData.value?.data?.length > 0
+    console.log('canProceed 计算:', {
+        name: !!projectForm.name,
+        building: !!projectForm.buildingType,
+        confirmed: dataConfirmed.value,
+        hasData: parsedData.value !== null,
+        dataLength: parsedData.value?.data?.length || 0,
+        result
+    })
+    return result
 })
 
 const canStartSimulation = computed(() => {
     return !simulating.value && parsedData.value !== null
 })
 
-// ===== 监听 =====
+// ===== 监听数据确认状态 =====
 watch(dataConfirmed, (newVal) => {
-    console.log('dataConfirmed changed:', newVal)
+    console.log('dataConfirmed 变化:', newVal)
+    console.log('parsedData:', parsedData.value)
 })
 
 // ===== 数据确认处理 =====
 const handleDataConfirmed = (data: any) => {
-    console.log('Data confirmed callback received:', data)
+    console.log('📦 DataUploader 确认数据回调:', data)
+
+    // 确保数据有效
+    if (!data || !data.data || data.data.length === 0) {
+        ElMessage.error('数据无效，请重新上传')
+        return
+    }
+
+    // 保存数据
     parsedData.value = data
     dataConfirmed.value = true
+
     ElMessage.success(`数据确认完成，共 ${data.data.length} 行，${data.headers.length} 列`)
+
+    // 强制更新视图
+    nextTick(() => {
+        console.log('视图更新后 canProceed:', canProceed.value)
+    })
 }
 
-// ===== 步骤导航 =====
+// ===== 下一步 =====
 const nextStep = () => {
+    console.log('点击下一步，canProceed:', canProceed.value)
+
     if (activeStep.value === 0) {
         if (!projectForm.name) {
             ElMessage.warning('请输入项目名称')
@@ -182,7 +328,7 @@ const prevStep = () => {
     activeStep.value--
 }
 
-// ===== 启动仿真（使用重命名后的 API） =====
+// ===== 启动仿真 =====
 const startSimulation = async () => {
     if (!parsedData.value) {
         ElMessage.warning('请先上传数据')
@@ -206,7 +352,6 @@ const startSimulation = async () => {
     simulating.value = true
 
     try {
-        // 使用重命名后的 API 函数 startSimulationAPI
         const response = await startSimulationAPI({
             projectName: projectForm.name,
             buildingType: projectForm.buildingType,
@@ -304,7 +449,6 @@ const getScheduleLabel = (type: string) => {
     margin-top: 30px;
 }
 
-/* 上传组件样式 */
 :deep(.el-upload-dragger) {
     width: 100%;
     padding: 30px 20px;
@@ -315,7 +459,6 @@ const getScheduleLabel = (type: string) => {
     color: #409EFF;
 }
 
-/* 表单样式 */
 :deep(.el-form-item) {
     margin-bottom: 22px;
 }
@@ -328,7 +471,6 @@ const getScheduleLabel = (type: string) => {
     margin-top: 8px;
 }
 
-/* 响应式 */
 @media (max-width: 768px) {
     .step-content {
         min-height: 300px;

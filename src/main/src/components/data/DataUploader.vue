@@ -96,6 +96,72 @@
             </el-table>
         </div>
 
+        <!-- ===== 异常值检测结果 ===== -->
+        <div v-if="outlierResult && Object.keys(outlierResult).length > 0" class="outlier-result">
+            <el-divider>
+                <span style="color: #e6a23c;">⚠️ 异常值检测结果</span>
+            </el-divider>
+
+            <el-alert title="检测到异常值" type="warning" :closable="false" style="margin-bottom: 16px;">
+                <template #default>
+                    <div>
+                        以下列中存在异常值（超出99%置信区间）：
+                        <span v-for="(indices, col) in outlierResult" :key="col" style="margin-left: 8px;">
+                            <el-tag size="small" type="warning">{{ col }}: {{ indices.length }} 个</el-tag>
+                        </span>
+                        <span style="display: block; margin-top: 8px; font-size: 13px; color: #909399;">
+                            提示：异常值可能影响仿真结果，建议检查后决定是否修正。
+                        </span>
+                    </div>
+                </template>
+            </el-alert>
+
+            <!-- 异常值表格 - 显示时间戳 -->
+            <el-table :data="outlierTableData" border stripe style="width: 100%" max-height="300">
+                <el-table-column prop="timestamp" label="时间戳" min-width="160">
+                    <template #default="{ row }">
+                        <span style="font-family: monospace; color: #409EFF;">{{ row.timestamp }}</span>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="column" label="列名" width="120">
+                    <template #default="{ row }">
+                        <el-tag size="small" type="warning">{{ row.column }}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="value" label="异常值" min-width="150">
+                    <template #default="{ row }">
+                        <span style="color: #e6a23c; font-weight: bold;">{{ row.value }}</span>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="type" label="类型" width="80">
+                    <template #default="{ row }">
+                        <el-tag :type="row.type === 'high' ? 'danger' : 'warning'" size="small">
+                            {{ row.type === 'high' ? '偏高' : '偏低' }}
+                        </el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="mean" label="平均值" width="120" />
+                <el-table-column prop="std" label="标准差" width="120" />
+                <el-table-column prop="lowerBound" label="下限" width="120" />
+                <el-table-column prop="upperBound" label="上限" width="120" />
+                <el-table-column label="操作" width="170" fixed="right">
+                    <template #default="{ row }">
+                        <el-button size="small" type="primary" @click="fixOutlier(row)">
+                            修正为{{ row.type === 'high' ? '上限' : '下限' }}
+                        </el-button>
+                        <el-button size="small" @click="ignoreOutlier(row)">
+                            忽略
+                        </el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+
+            <div style="margin-top: 16px; display: flex; gap: 12px; justify-content: flex-end;">
+                <el-button size="small" @click="ignoreAllOutliers">忽略全部异常值</el-button>
+                <el-button size="small" type="primary" @click="fixAllOutliers">全部修正</el-button>
+            </div>
+        </div>
+
         <!-- 错误数据表格 -->
         <div v-if="showErrorTable && validationResult && validationResult.errors.length > 0" class="error-table">
             <el-divider>
@@ -239,6 +305,28 @@ interface ValidationResult {
     }
 }
 
+// ===== 异常值统计类型 =====
+interface OutlierStats {
+    mean: number
+    std: number
+    lowerBound: number
+    upperBound: number
+}
+
+// ===== 异常值行数据类型 =====
+interface OutlierRowData {
+    rowIndex: number
+    timestamp: string
+    column: string
+    value: string
+    mean: string
+    std: string
+    lowerBound: string
+    upperBound: string
+    type: 'high' | 'low' | 'normal'
+    fixValue: number
+}
+
 // ===== Props & Emits =====
 const emit = defineEmits<{
     (e: 'data-confirmed', data: any): void
@@ -248,7 +336,7 @@ const emit = defineEmits<{
 const fileList = ref<any[]>([])
 const parseResult = ref<ParseResult | null>(null)
 const validationResult = ref<ValidationResult | null>(null)
-const showFullData = ref(true)  // ✅ 默认展开全部
+const showFullData = ref(true)
 const showErrorTable = ref(false)
 const workingData = ref<Record<string, any>[]>([])
 const tableLoading = ref(false)
@@ -260,6 +348,11 @@ const filteredData = ref<Record<string, any>[]>([])
 const allData = ref<Record<string, any>[]>([])
 const canUpdatePreview = ref(false)
 const isInitialized = ref(false)
+
+// ===== 异常值相关 =====
+const outlierResult = ref<Record<string, number[]>>({})
+const outlierStats = ref<Record<string, OutlierStats>>({})
+const ignoredOutliers = ref<Set<string>>(new Set())
 
 // ===== Computed =====
 const getTimeColumnName = () => {
@@ -300,13 +393,12 @@ const errorDataList = computed(() => {
     }))
 })
 
-// ===== ✅ 显示数据 - 默认显示全部 =====
+// ===== 显示数据 =====
 const displayData = computed(() => {
     const sourceData = filteredData.value.length > 0 ? filteredData.value : allData.value
     if (showFullData.value) {
         return sourceData
     }
-    // 收起时显示10行
     return sourceData.slice(0, 10)
 })
 
@@ -329,7 +421,53 @@ const canConfirm = computed(() => {
         validationResult.value.isValid
 })
 
-// ===== 监听时间变化，启用更新按钮 =====
+// ===== 异常值表格数据（显示时间戳） =====
+const outlierTableData = computed<OutlierRowData[]>(() => {
+    const rows: OutlierRowData[] = []
+    const timeCol = getTimeColumnName()
+
+    for (const [column, indices] of Object.entries(outlierResult.value)) {
+        const stats = outlierStats.value[column]
+        if (!stats) continue
+        const { mean, std, lowerBound, upperBound } = stats
+
+        indices.forEach((rowIndex: number) => {
+            const key = `${column}-${rowIndex}`
+            if (ignoredOutliers.value.has(key)) return
+
+            const value = workingData.value[rowIndex]?.[column]
+            const timestamp = workingData.value[rowIndex]?.[timeCol] || `第 ${rowIndex + 1} 行`
+
+            if (value !== undefined && value !== null) {
+                const numValue = Number(value)
+                const isHigh = numValue > upperBound
+                const isLow = numValue < lowerBound
+                let type: 'high' | 'low' | 'normal' = 'normal'
+                if (isHigh) type = 'high'
+                else if (isLow) type = 'low'
+
+                // 偏高修正为上限，偏低修正为下限
+                const fixValue = isHigh ? upperBound : (isLow ? lowerBound : mean)
+
+                rows.push({
+                    rowIndex,
+                    timestamp,
+                    column,
+                    value: numValue.toFixed(4),
+                    mean: mean.toFixed(4),
+                    std: std.toFixed(4),
+                    lowerBound: lowerBound.toFixed(4),
+                    upperBound: upperBound.toFixed(4),
+                    type: type,
+                    fixValue: fixValue
+                })
+            }
+        })
+    }
+    return rows.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+})
+
+// ===== 监听时间变化 =====
 watch([startTime, endTime], () => {
     if (startTime.value && endTime.value && isInitialized.value) {
         canUpdatePreview.value = true
@@ -354,7 +492,7 @@ const filterDataByTimeRange = (start: string, end: string) => {
     console.log(`筛选数据: ${filteredData.value.length} / ${allData.value.length} 行`)
 }
 
-// ===== 初始化时间范围（默认显示8月1日） =====
+// ===== 初始化时间范围 =====
 const initializeTimeRange = () => {
     const timeCol = getTimeColumnName()
     if (!timeCol || allData.value.length === 0) return
@@ -367,7 +505,6 @@ const initializeTimeRange = () => {
 
     const sorted = [...times].sort()
 
-    // ===== 查找8月1日的数据 =====
     const targetDatePatterns = [
         '2025-08-01', '2025/08/01', '2025-8-1', '2025/8/1',
         '2024-08-01', '2024/08/01', '2024-8-1', '2024/8/1'
@@ -412,6 +549,99 @@ const initializeTimeRange = () => {
     canUpdatePreview.value = false
 }
 
+// ===== 异常值处理方法 =====
+
+/**
+ * 修正单个异常值
+ * 偏高 → 修正为上限
+ * 偏低 → 修正为下限
+ */
+const fixOutlier = (row: OutlierRowData) => {
+    const { rowIndex, column, type, fixValue } = row
+
+    // 偏高修正为上限，偏低修正为下限
+    const newValue = fixValue
+
+    workingData.value[rowIndex][column] = newValue
+    allData.value[rowIndex][column] = newValue
+
+    const filteredIndex = filteredData.value.findIndex((_, idx) => idx === rowIndex)
+    if (filteredIndex !== -1) {
+        filteredData.value[filteredIndex][column] = newValue
+    }
+
+    const typeLabel = type === 'high' ? '偏高' : '偏低'
+    const fixLabel = type === 'high' ? '上限' : '下限'
+    ElMessage.success(`已将 ${row.timestamp} 的 " ${column}" 列（${typeLabel}）修正为${fixLabel} ${newValue.toFixed(4)}`);
+    const indices = outlierResult.value[column];
+    if (indices) {
+        const idx = indices.indexOf(rowIndex);
+        if (idx > -1) {
+            indices.splice(idx, 1)
+            if (indices.length === 0) {
+                delete outlierResult.value[column]
+            }
+        }
+    }
+}
+
+/**
+ * 忽略单个异常值
+ */
+const ignoreOutlier = (row: OutlierRowData) => {
+    const key = `${row.column}-${row.rowIndex}`
+    ignoredOutliers.value.add(key)
+    ElMessage.info(`已忽略 ${row.timestamp} 的异常值`)
+}
+
+/**
+ * 全部修正异常值
+ */
+const fixAllOutliers = () => {
+    const total = outlierTableData.value.length
+    if (total === 0) return
+
+    ElMessageBox.confirm(
+        `将把所有 ${total} 个异常值修正为对应的${total > 1 ? '上下限' : '上限或下限'}（偏高→上限，偏低→下限），确定继续吗？`,
+        '全部修正',
+        {
+            confirmButtonText: '确定修正',
+            cancelButtonText: '取消',
+            type: 'info'
+        }
+    ).then(() => {
+        const rows = [...outlierTableData.value]
+        rows.forEach(row => {
+            fixOutlier(row)
+        })
+        ElMessage.success(`已修正 ${rows.length} 个异常值`)
+    }).catch(() => { })
+}
+
+/**
+ * 全部忽略异常值
+ */
+const ignoreAllOutliers = () => {
+    const total = outlierTableData.value.length
+    if (total === 0) return
+
+    ElMessageBox.confirm(
+        `将忽略所有 ${total} 个异常值，确定继续吗？`,
+        '全部忽略',
+        {
+            confirmButtonText: '确定忽略',
+            cancelButtonText: '取消',
+            type: 'info'
+        }
+    ).then(() => {
+        outlierTableData.value.forEach(row => {
+            const key = `${row.column}-${row.rowIndex}`
+            ignoredOutliers.value.add(key)
+        })
+        ElMessage.info(`已忽略 ${total} 个异常值`)
+    }).catch(() => { })
+}
+
 // ===== Methods =====
 const handleFileUpload = (file: any) => {
     fileList.value.push(file)
@@ -425,6 +655,9 @@ const handleFileUpload = (file: any) => {
     endTime.value = ''
     canUpdatePreview.value = false
     isInitialized.value = false
+    outlierResult.value = {}
+    outlierStats.value = {}
+    ignoredOutliers.value = new Set()
 
     const reader = new FileReader()
     reader.onload = (e: any) => {
@@ -566,30 +799,59 @@ const handleDataConfirm = () => {
 const confirmData = () => {
     if (!parseResult.value || !workingData.value.length) return
 
+    // 检测异常值 - 使用99%置信区间
     const timeColumn = getTimeColumnName()
     const numericColumns = parseResult.value.headers.filter((h: string) => h !== timeColumn)
 
-    const outliers: Record<string, number[]> = {}
+    outlierResult.value = {}
+    outlierStats.value = {}
+    ignoredOutliers.value = new Set()
+
     numericColumns.forEach((col: string) => {
-        const result = detectOutliers(workingData.value, col)
-        if (result.length > 0) {
-            outliers[col] = result
+        const values = workingData.value.map((row: any) => parseFloat(row[col])).filter((v: any) => !isNaN(v))
+        if (values.length > 3) {
+            const mean = values.reduce((a: any, b: any) => a + b, 0) / values.length
+            const std = Math.sqrt(values.reduce((a: any, b: any) => a + Math.pow(b - mean, 2), 0) / values.length)
+            if (std > 0) {
+                // 99%置信区间：均值 ± 2.576 * 标准差
+                const zScore = 2.576
+                const lowerBound = mean - zScore * std
+                const upperBound = mean + zScore * std
+
+                outlierStats.value[col] = {
+                    mean,
+                    std,
+                    lowerBound,
+                    upperBound
+                }
+
+                const outliers: number[] = []
+                workingData.value.forEach((row: any, index: number) => {
+                    const val = parseFloat(row[col])
+                    if (!isNaN(val) && (val < lowerBound || val > upperBound)) {
+                        outliers.push(index)
+                    }
+                })
+                if (outliers.length > 0) {
+                    outlierResult.value[col] = outliers
+                }
+            }
         }
     })
 
-    if (Object.keys(outliers).length > 0) {
-        ElMessage.warning(`检测到 ${Object.keys(outliers).length} 列存在异常值`)
+    const outlierCount = Object.keys(outlierResult.value).length
+    if (outlierCount > 0) {
+        ElMessage.warning(`检测到 ${outlierCount} 列存在异常值（超出99%置信区间），请查看详情`)
     }
 
     emit('data-confirmed', {
         data: workingData.value,
         headers: parseResult.value.headers,
-        outliers: outliers,
+        outliers: outlierResult.value,
         summary: validationResult.value?.summary
     })
 }
 
-// ===== 错误处理函数 =====
 const handleSuggestionChange = (row: ValidationError) => {
     const error = validationResult.value?.errors.find(e =>
         e.rowIndex === row.rowIndex && e.column === row.column
@@ -803,6 +1065,14 @@ const autoFixAll = () => {
 .preview-actions {
     display: flex;
     gap: 8px;
+}
+
+.outlier-result {
+    margin-top: 20px;
+}
+
+.outlier-result .el-divider {
+    margin: 20px 0 16px 0;
 }
 
 .error-table {

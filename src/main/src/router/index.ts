@@ -6,7 +6,6 @@ import Dashboard from '@/views/Dashboard.vue'
 import ProjectNew from '@/views/ProjectNew.vue'
 import Projects from '@/views/Projects.vue'
 import SimulationView from '@/views/SimulationView.vue'
-import ResultsView from '@/views/ResultsView.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 
 const routes = [
@@ -25,7 +24,6 @@ const routes = [
       { path: 'project/new', name: 'ProjectNew', component: ProjectNew },
       { path: 'projects', name: 'Projects', component: Projects },
       { path: 'simulation/:taskId', name: 'SimulationView', component: SimulationView },
-      { path: 'results/:taskId', name: 'ResultsView', component: ResultsView },
     ],
   },
 ] as RouteRecordRaw[]
