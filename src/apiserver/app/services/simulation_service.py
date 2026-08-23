@@ -198,6 +198,23 @@ class SimulationService:
                     "updatedAt": status.get("updated_at")
                 })
         return sorted(tasks, key=lambda x: x.get("updatedAt", ""), reverse=True)
+    
+    def reset_task(self, task_id: str) -> bool:
+        """重置任务状态，保留数据用于重新仿真"""
+        if task_id not in self.tasks:
+            return False
+        
+        # 重置任务状态，保留原始数据
+        self.tasks[task_id]["status"] = "pending"
+        self.tasks[task_id]["progress"] = 0
+        self.tasks[task_id]["current_week"] = 0
+        self.tasks[task_id]["started_at"] = datetime.now().isoformat()
+        self.tasks[task_id]["updated_at"] = datetime.now().isoformat()
+        self.tasks[task_id]["result"] = None
+        self.tasks[task_id]["error"] = None
+        
+        print(f"🔄 任务已重置: {task_id}")
+        return True
 
 
 # 单例

@@ -95,3 +95,10 @@ export async function getSimulationResults(taskId: string): Promise<SimulationRe
   const response = await api.get(`/simulate/results/${taskId}`)
   return response.data
 }
+
+export async function restartSimulation(
+  taskId: string,
+): Promise<{ taskId: string; status: string; message: string }> {
+  const response = await api.post(`/simulate/restart/${taskId}`)
+  return response.data
+}

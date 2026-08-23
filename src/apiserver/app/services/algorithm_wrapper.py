@@ -208,18 +208,22 @@ class AlgorithmWrapper:
                 pump_cw_power = abs(pump_cw_power) if pump_cw_power < 0 else pump_cw_power
                 tower_power = abs(tower_power) if tower_power < 0 else tower_power
                 
-                # 总能耗 = 所有设备耗电之和
+                # 总能耗
                 p_station = chiller_power + pump_chw_power + pump_cw_power + tower_power
-                
-                # 累加能耗 (kW·h)
                 total_energy += p_station
                 
-                p_chillers = result.get('P_chillers', 0)
-                if p_chillers > 0:
-                    cop = result.get('COP_chillers', 0)
-                    if cop > 0:
-                        cop_sum += cop
-                        cop_count += 1
+                # 从算法结果中获取 COP
+                cop = result.get('冷机COP', 0)
+                if cop and cop > 0:
+                    cop_sum += cop
+                    cop_count += 1
+                else:
+                    # 如果算法没有返回 COP，从能耗推算
+                    if chiller_power > 0 and cooling_load > 0:
+                        calculated_cop = cooling_load / chiller_power
+                        if calculated_cop > 0:
+                            cop_sum += calculated_cop
+                            cop_count += 1
                 
                 if cooling_load > peak_cooling:
                     peak_cooling = cooling_load
@@ -227,8 +231,11 @@ class AlgorithmWrapper:
         avg_temp = temp_sum / temp_count if temp_count > 0 else 25
         week_number = int(week_data.index[0] // 168) + 1 if len(week_data) > 0 else 1
         
-        # ===== 打印每周能耗 =====
-        print(f"📊 第 {week_number} 周: 能耗={total_energy:.2f} kWh, 负荷={total_cooling_load:.2f} kW")
+        # 计算平均 COP
+        avg_cop = cop_sum / cop_count if cop_count > 0 else 0
+        
+        # ===== 打印调试日志 =====
+        print(f"📊 第 {week_number} 周: 能耗={total_energy:.2f} kWh, 负荷={total_cooling_load:.2f} kW, COP={avg_cop:.2f} (样本数: {cop_count})")
         
         return {
             'weekNumber': week_number,
@@ -248,9 +255,12 @@ class AlgorithmWrapper:
         
         try:
             result = self.station(load, temp, humid)
-            # ===== 打印单点结果 =====
-            if result and result.get('P_station', 0) > 0:
-                print(f"✅ 单点仿真成功: load={load}, P_station={result.get('P_station')}")
+            if result:
+                # 确保 COP 字段存在
+                if '冷机COP' not in result and 'COP_chillers' in result:
+                    result['冷机COP'] = result['COP_chillers']
+                elif '冷机COP' not in result and 'cop' in result:
+                    result['冷机COP'] = result['cop']
             return result
         except Exception as e:
             print(f"❌ 单点仿真错误: {e}")

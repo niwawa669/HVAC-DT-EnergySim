@@ -19,7 +19,6 @@
 
         <!-- ===== 主要监控区域 ===== -->
         <el-row :gutter="20" class="monitor-row">
-            <!-- 左侧：进度与状态 -->
             <el-col :span="8">
                 <el-card shadow="hover" class="status-card">
                     <div class="progress-container">
@@ -51,7 +50,6 @@
                 </el-card>
             </el-col>
 
-            <!-- 右侧：关键指标 -->
             <el-col :span="16">
                 <el-row :gutter="20">
                     <el-col :span="12" v-for="metric in metrics" :key="metric.label">
@@ -98,6 +96,12 @@
                         <el-button size="small" type="primary" @click="toggleLogAutoScroll">
                             {{ logAutoScroll ? '暂停滚动' : '自动滚动' }}
                         </el-button>
+                        <el-button v-if="isCompleted || progress > 0" size="small" type="warning"
+                            :loading="isRestarting" @click="handleRestartSimulation">
+                            <el-icon>
+                                <Refresh />
+                            </el-icon> 重新仿真
+                        </el-button>
                     </div>
                 </div>
             </template>
@@ -114,7 +118,7 @@
             </div>
         </el-card>
 
-        <!-- ===== 仿真结果区域（仿真完成后显示） ===== -->
+        <!-- ===== 仿真结果区域 ===== -->
         <el-card v-if="isCompleted" shadow="hover" class="result-card">
             <template #header>
                 <div class="result-header">
@@ -145,7 +149,6 @@
                 </el-col>
             </el-row>
 
-            <!-- 结果雷达图 -->
             <div ref="radarChartRef" class="radar-chart-container"></div>
         </el-card>
     </div>
@@ -155,6 +158,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import {
     DataBoard, TrendCharts, Sunny, Finished,
@@ -162,6 +166,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { formatNumber } from '@/utils/format'
+import { restartSimulation } from '@/api/simulation'
 
 // ===== 路由 =====
 const router = useRouter()
@@ -176,6 +181,7 @@ const elapsedTime = ref('00:00:00')
 const estimatedRemaining = ref('')
 const logAutoScroll = ref(true)
 const isCompleted = ref(false)
+const isRestarting = ref(false)
 const chartRef = ref<HTMLDivElement | null>(null)
 const radarChartRef = ref<HTMLDivElement | null>(null)
 const logContainerRef = ref<HTMLDivElement | null>(null)
@@ -219,16 +225,16 @@ const metrics = ref([
     }
 ])
 
-// ===== 结果汇总数据 =====
+// ===== 结果汇总 =====
 const resultSummary = computed(() => {
     if (!resultData.value) return []
 
     const summary = resultData.value.summary
     return [
         { label: '总能耗', value: formatNumber(summary.totalEnergy), unit: 'kWh', color: '#409EFF' },
-        { label: '单位面积能耗 (EUI)', value: summary.eui.toFixed(2), unit: 'kWh/m²', color: '#67C23A' },
-        { label: '峰值冷负荷', value: summary.peakCoolingLoad.toFixed(2), unit: 'kW', color: '#E6A23C' },
-        { label: '平均COP', value: summary.avgCop.toFixed(2), unit: '-', color: '#F56C6C' },
+        { label: '单位面积能耗 (EUI)', value: summary.eui ? summary.eui.toFixed(2) : '0.00', unit: 'kWh/m²', color: '#67C23A' },
+        { label: '峰值冷负荷', value: summary.peakCoolingLoad ? summary.peakCoolingLoad.toFixed(2) : '0.00', unit: 'kW', color: '#E6A23C' },
+        { label: '平均COP', value: summary.avgCop ? summary.avgCop.toFixed(2) : '0.00', unit: '-', color: '#F56C6C' },
         { label: '碳排放量', value: formatNumber(summary.carbonEmission), unit: 'kg CO₂', color: '#909399' }
     ]
 })
@@ -300,11 +306,6 @@ const handleWebSocketMessage = (message: any) => {
         case 'progress':
             if (message.data) {
                 const data = message.data
-                console.log('📊 接收到的能耗数据:', {
-                    周数: data.weekNumber,
-                    能耗: data.totalEnergyConsumption,
-                    负荷: data.totalCoolingLoad
-                })
                 progress.value = data.progressPercentage
                 currentWeek.value = data.weekNumber
                 receivedWeeks.value++
@@ -319,14 +320,14 @@ const handleWebSocketMessage = (message: any) => {
                     },
                     {
                         label: '平均COP',
-                        value: data.avgSystemCop.toFixed(2),
+                        value: data.avgSystemCop ? data.avgSystemCop.toFixed(2) : '0.00',
                         icon: 'TrendCharts',
                         color: '#67C23A',
                         bgColor: 'rgba(103, 194, 58, 0.1)'
                     },
                     {
                         label: '平均室外温度',
-                        value: data.avgOutdoorTemp.toFixed(1) + ' °C',
+                        value: data.avgOutdoorTemp ? data.avgOutdoorTemp.toFixed(1) + ' °C' : '0 °C',
                         icon: 'Sunny',
                         color: '#E6A23C',
                         bgColor: 'rgba(230, 162, 60, 0.1)'
@@ -364,7 +365,6 @@ const handleWebSocketMessage = (message: any) => {
                 addLog(`📈 总能耗: ${formatNumber(message.summary.totalEnergy)} kWh`, 'info')
             }
 
-            // 初始化雷达图
             nextTick(() => {
                 initRadarChart()
             })
@@ -415,25 +415,130 @@ const toggleLogAutoScroll = () => {
     logAutoScroll.value = !logAutoScroll.value
 }
 
+// ===== 重置所有数据 =====
+const resetAllData = () => {
+    progress.value = 0
+    currentWeek.value = 0
+    receivedWeeks.value = 0
+    elapsedTime.value = '00:00:00'
+    estimatedRemaining.value = ''
+    isCompleted.value = false
+    resultData.value = null
+    startTime = new Date()
+
+    metrics.value = [
+        {
+            label: '本周累计能耗',
+            value: '0 kWh',
+            icon: 'DataBoard',
+            color: '#409EFF',
+            bgColor: 'rgba(64, 158, 255, 0.1)'
+        },
+        {
+            label: '平均COP',
+            value: '0.00',
+            icon: 'TrendCharts',
+            color: '#67C23A',
+            bgColor: 'rgba(103, 194, 58, 0.1)'
+        },
+        {
+            label: '平均室外温度',
+            value: '0 °C',
+            icon: 'Sunny',
+            color: '#E6A23C',
+            bgColor: 'rgba(230, 162, 60, 0.1)'
+        },
+        {
+            label: '已推送周数',
+            value: '0/52',
+            icon: 'Finished',
+            color: '#F56C6C',
+            bgColor: 'rgba(245, 108, 108, 0.1)'
+        }
+    ]
+
+    chartData.value = {
+        weeks: [],
+        coolingLoad: [],
+        heatingLoad: [],
+        energyConsumption: []
+    }
+
+    logs.value = []
+
+    if (chartInstance) {
+        chartInstance.clear()
+        initChart()
+    }
+
+    if (radarChartInstance) {
+        radarChartInstance.clear()
+        radarChartInstance = null
+    }
+}
+
+// ===== 重新仿真（唯一声明） =====
+const handleRestartSimulation = async () => {
+    if (isRestarting.value) return
+
+    try {
+        await ElMessageBox.confirm(
+            '重新仿真将清除当前所有数据并重新开始，确定继续吗？',
+            '确认重新仿真',
+            {
+                confirmButtonText: '确定重新仿真',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }
+        )
+    } catch {
+        return
+    }
+
+    isRestarting.value = true
+    addLog('🔄 开始重新仿真...', 'info')
+
+    try {
+        // 重置数据显示
+        resetAllData()
+
+        // 调用重新仿真 API（使用相同的 task_id）
+        const response = await restartSimulation(taskId)
+        addLog(`📤 已发送重新仿真请求，任务ID: ${taskId}`, 'info')
+        addLog('⏳ 等待新的仿真数据...', 'info')
+        ElMessage.success('仿真已重新启动')
+
+        startTime = new Date()
+        elapsedTime.value = '00:00:00'
+        estimatedRemaining.value = ''
+
+        isRestarting.value = false
+
+    } catch (error: any) {
+        isRestarting.value = false
+        const errorMsg = error.response?.data?.detail || error.message || '重新仿真失败'
+        ElMessage.error(errorMsg)
+        addLog(`❌ 重新仿真失败: ${errorMsg}`, 'error')
+        console.error('重新仿真错误:', error)
+    }
+}
+
 // ===== 图表方法 =====
 const initChart = () => {
     if (!chartRef.value) return
 
     chartInstance = echarts.init(chartRef.value)
 
-    // ===== 计算数据范围 =====
     const coolingData = chartData.value.coolingLoad.filter(v => v > 0)
     const heatingData = chartData.value.heatingLoad.filter(v => v > 0)
     const energyData = chartData.value.energyConsumption.filter(v => v > 0)
 
-    // 左侧 Y 轴（负荷）
     const maxCooling = coolingData.length > 0 ? Math.max(...coolingData) : 100
     const maxHeating = heatingData.length > 0 ? Math.max(...heatingData) : 100
     const loadMax = Math.max(maxCooling, maxHeating) * 1.2
 
-    // 右侧 Y 轴（能耗）
     const maxEnergy = energyData.length > 0 ? Math.max(...energyData) : 1000
-    const energyMax = Math.max(maxEnergy * 1.2, 100)  // 至少 100
+    const energyMax = Math.max(maxEnergy * 1.2, 100)
 
     const option = {
         tooltip: {
@@ -548,7 +653,6 @@ const initChart = () => {
 const updateChart = () => {
     if (!chartInstance) return
 
-    // ===== 重新计算数据范围 =====
     const coolingData = chartData.value.coolingLoad.filter(v => v > 0)
     const heatingData = chartData.value.heatingLoad.filter(v => v > 0)
     const energyData = chartData.value.energyConsumption.filter(v => v > 0)
@@ -569,14 +673,8 @@ const updateChart = () => {
             }
         },
         yAxis: [
-            {
-                max: loadMax,
-                min: 0
-            },
-            {
-                max: energyMax,
-                min: 0
-            }
+            { max: loadMax, min: 0 },
+            { max: energyMax, min: 0 }
         ],
         series: [
             { data: chartData.value.coolingLoad },
@@ -595,34 +693,59 @@ const initRadarChart = () => {
     radarChartInstance = echarts.init(radarChartRef.value)
 
     const summary = resultData.value.summary
-    const maxEnergy = summary.totalEnergy * 1.2
+
+    const copMax = Math.max(summary.avgCop * 1.5, 5)
+    const euiMax = Math.max(summary.eui * 1.5, 50)
+    const carbonMax = Math.max(summary.carbonEmission * 1.5, 10000)
+    const loadMax = 100
+    const loadRate = Math.min((summary.peakCoolingLoad / 500) * 100, 100)
 
     const option = {
         tooltip: {
-            trigger: 'item'
+            trigger: 'item',
+            formatter: function (params: any) {
+                let result = `<strong>${params.name}</strong><br/>`
+                const names = ['能效 (COP)', '经济性 (EUI)', '环保性 (碳排放)', '负荷率']
+                const units = ['', ' kWh/m²', ' kg CO₂', ' %']
+                params.value.forEach((val: number, index: number) => {
+                    result += `${names[index]}: ${val.toFixed(2)}${units[index]}<br/>`
+                })
+                return result
+            }
         },
         radar: {
             indicator: [
-                { name: '能效 (COP)', max: 6 },
-                { name: '经济性 (EUI)', max: 200 },
-                { name: '环保性 (碳排放)', max: 150000 },
-                { name: '负荷率', max: 100 }
+                { name: '能效 (COP)', max: copMax, color: '#409EFF' },
+                { name: '经济性 (EUI)', max: euiMax, color: '#67C23A' },
+                { name: '环保性 (碳排放)', max: carbonMax, color: '#E6A23C' },
+                { name: '负荷率', max: loadMax, color: '#F56C6C' }
             ],
             shape: 'circle',
             center: ['50%', '50%'],
-            radius: '65%'
+            radius: '65%',
+            axisName: {
+                color: '#333',
+                fontSize: 12,
+                borderRadius: 4,
+                padding: [2, 4]
+            },
+            splitArea: {
+                areaStyle: {
+                    color: ['rgba(64, 158, 255, 0.02)', 'rgba(64, 158, 255, 0.06)']
+                }
+            },
+            splitLine: {
+                lineStyle: {
+                    color: 'rgba(64, 158, 255, 0.15)'
+                }
+            }
         },
         series: [
             {
                 type: 'radar',
                 data: [
                     {
-                        value: [
-                            summary.avgCop,
-                            200 - summary.eui,
-                            150000 - summary.carbonEmission,
-                            (summary.peakCoolingLoad / 500) * 100
-                        ],
+                        value: [summary.avgCop, summary.eui, summary.carbonEmission, loadRate],
                         name: '当前方案',
                         areaStyle: {
                             color: 'rgba(64, 158, 255, 0.3)'
@@ -633,6 +756,12 @@ const initRadarChart = () => {
                         },
                         itemStyle: {
                             color: '#409EFF'
+                        },
+                        label: {
+                            show: true,
+                            formatter: (params: any) => params.value.toFixed(1),
+                            fontSize: 10,
+                            color: '#333'
                         }
                     }
                 ]
@@ -672,11 +801,7 @@ const updateTimer = () => {
 
 // ===== 报告生成 =====
 const generateReport = (type: string) => {
-    const names = {
-        standard: '标准报告',
-        simplified: '简化报告',
-        expert: '专家报告'
-    }
+    const names = { standard: '标准报告', simplified: '简化报告', expert: '专家报告' }
     ElMessage.success(`${names[type]}生成中...`)
     setTimeout(() => {
         ElMessage.success(`${names[type]}生成完成！`)
@@ -754,7 +879,7 @@ onUnmounted(() => {
     cleanup()
 })
 
-// ===== 监听结果数据变化，更新雷达图 =====
+// ===== 监听结果数据变化 =====
 watch(resultData, () => {
     if (resultData.value) {
         nextTick(() => {
@@ -765,6 +890,7 @@ watch(resultData, () => {
 </script>
 
 <style scoped>
+/* ... 样式保持不变 ... */
 .simulation-view {
     padding: 0;
 }
@@ -928,6 +1054,8 @@ watch(resultData, () => {
 .log-actions {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 .log-container {
@@ -981,7 +1109,6 @@ watch(resultData, () => {
     padding: 20px 0;
 }
 
-/* ===== 结果区域 ===== */
 .result-card {
     margin-top: 20px;
 }

@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import Dict, Any
 from datetime import datetime
@@ -149,3 +151,52 @@ async def list_simulations(
     """获取用户的所有仿真任务"""
     tasks = simulation_service.list_user_tasks(current_user.get("id", 1))
     return {"tasks": tasks, "total": len(tasks)}
+
+
+@router.post("/restart/{task_id}", response_model=TaskResponse)
+async def restart_simulation(
+    task_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """重新仿真 - 使用相同的任务ID重新计算"""
+    try:
+        # 检查任务是否存在
+        status = simulation_service.get_task_status(task_id)
+        
+        if not status:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        
+        # 检查用户权限
+        if status.get("user_id") != current_user.get("id"):
+            if current_user.get("role") != "admin":
+                raise HTTPException(status_code=403, detail="无权操作此任务")
+        
+        # 重置任务状态
+        simulation_service.reset_task(task_id)
+        
+        # 获取原始数据
+        request_data = {
+            "config": status.get("config"),
+            "data": status.get("data"),
+            "projectName": status.get("project_name"),
+            "buildingType": status.get("building_type"),
+            "area": status.get("area", 2931.0)
+        }
+        
+        # 重新启动仿真
+        asyncio.create_task(
+            simulation_service._run_simulation_task(task_id, request_data)
+        )
+        
+        return TaskResponse(
+            taskId=task_id,
+            status=TaskStatus.PENDING,
+            progress=0,
+            currentWeek=0,
+            totalWeeks=52,
+            message="仿真已重新启动"
+        )
+        
+    except Exception as e:
+        print(f"❌ 重新仿真失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

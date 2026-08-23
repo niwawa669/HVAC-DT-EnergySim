@@ -57,12 +57,6 @@
                         </el-alert>
                     </el-form-item>
 
-                    <!-- 调试信息 -->
-                    <el-form-item v-if="!dataConfirmed">
-                        <el-alert title="请确认数据" type="info" :closable="false" show-icon
-                            description='上传数据文件后，点击数据预览区域下方的"确认数据"按钮继续' />
-                    </el-form-item>
-
                     <el-form-item>
                         <el-button type="primary" @click="nextStep" :disabled="!canProceed">
                             下一步
@@ -219,6 +213,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, ArrowLeft, VideoPlay } from '@element-plus/icons-vue'
 import DataUploader from '@/components/data/DataUploader.vue'
+// ===== 导入 startSimulation API（重命名避免冲突） =====
 import { startSimulation as startSimulationAPI } from '@/api/simulation'
 
 const router = useRouter()
@@ -251,20 +246,11 @@ const configForm = reactive({
 
 // ===== 计算属性 =====
 const canProceed = computed(() => {
-    const result = !!projectForm.name &&
+    return !!projectForm.name &&
         !!projectForm.buildingType &&
         dataConfirmed.value === true &&
         parsedData.value !== null &&
         parsedData.value?.data?.length > 0
-    console.log('canProceed 计算:', {
-        name: !!projectForm.name,
-        building: !!projectForm.buildingType,
-        confirmed: dataConfirmed.value,
-        hasData: parsedData.value !== null,
-        dataLength: parsedData.value?.data?.length || 0,
-        result
-    })
-    return result
 })
 
 const canStartSimulation = computed(() => {
@@ -281,19 +267,16 @@ watch(dataConfirmed, (newVal) => {
 const handleDataConfirmed = (data: any) => {
     console.log('📦 DataUploader 确认数据回调:', data)
 
-    // 确保数据有效
     if (!data || !data.data || data.data.length === 0) {
         ElMessage.error('数据无效，请重新上传')
         return
     }
 
-    // 保存数据
     parsedData.value = data
     dataConfirmed.value = true
 
     ElMessage.success(`数据确认完成，共 ${data.data.length} 行，${data.headers.length} 列`)
 
-    // 强制更新视图
     nextTick(() => {
         console.log('视图更新后 canProceed:', canProceed.value)
     })
@@ -328,7 +311,7 @@ const prevStep = () => {
     activeStep.value--
 }
 
-// ===== 启动仿真 =====
+// ===== 启动仿真（完整版） =====
 const startSimulation = async () => {
     if (!parsedData.value) {
         ElMessage.warning('请先上传数据')
@@ -352,7 +335,8 @@ const startSimulation = async () => {
     simulating.value = true
 
     try {
-        const response = await startSimulationAPI({
+        // ===== 构建项目数据 =====
+        const projectData = {
             projectName: projectForm.name,
             buildingType: projectForm.buildingType,
             area: projectForm.area,
@@ -371,10 +355,23 @@ const startSimulation = async () => {
                 headers: parsedData.value.headers,
                 rows: parsedData.value.data
             }
+        }
+
+        // ===== 保存项目数据到 sessionStorage（用于重新仿真） =====
+        sessionStorage.setItem('currentProjectData', JSON.stringify(projectData))
+        console.log('📦 项目数据已保存到 sessionStorage:', {
+            projectName: projectData.projectName,
+            dataRows: projectData.data.rows.length,
+            config: projectData.config
         })
+
+        // ===== 调用 API 启动仿真 =====
+        const response = await startSimulationAPI(projectData)
 
         simulating.value = false
         ElMessage.success(`仿真任务已启动！任务ID: ${response.taskId}`)
+
+        // ===== 跳转到仿真监控页面 =====
         router.push(`/simulation/${response.taskId}`)
 
     } catch (error: any) {
@@ -418,6 +415,7 @@ const getScheduleLabel = (type: string) => {
 </script>
 
 <style scoped>
+/* ... 样式保持不变 ... */
 .project-new {
     padding: 0;
 }
