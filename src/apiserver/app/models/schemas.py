@@ -68,28 +68,31 @@ class TaskResponse(BaseModel):
     updatedAt: Optional[datetime] = None
     message: Optional[str] = None
 
+# ===== 响应模型 =====
 class SimulationSummary(BaseModel):
-    totalEnergy: float
-    eui: float
-    peakCoolingLoad: float
-    peakHeatingLoad: float
-    avgCop: float
-    carbonEmission: float
+    totalEnergy: float = 0
+    totalCoolingLoad: float = 0
+    totalQStation: float = 0
+    peakCoolingLoad: float = 0
+    eui: float = 0
+    avgCop: float = 0
+    carbonEmission: float = 0
 
 class WeeklyData(BaseModel):
     weekNumber: int
-    avgOutdoorTemp: float
-    totalCoolingLoad: float
-    totalHeatingLoad: float
-    totalEnergyConsumption: float
-    avgSystemCop: float
+    totalCoolingLoad: float = 0
+    peakCoolingLoad: float = 0
+    totalQStation: float = 0
+    totalEnergyConsumption: float = 0
+    avgSystemCop: float = 0
+    avgOutdoorTemp: float = 0
 
 class SimulationResultResponse(BaseModel):
     taskId: str
     projectId: int
     summary: SimulationSummary
     weeklyData: List[WeeklyData]
-    createdAt: datetime
+    createdAt: str
 
 # ===== WebSocket 消息 =====
 class WSProgressMessage(BaseModel):

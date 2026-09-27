@@ -40,6 +40,8 @@ class AlgorithmWrapper:
     def __init__(self):
         self.station_info = None
         self.station = None
+        self._last_summary = {}
+        self._last_weekly_data = []
         self._initialize_station()
     
     def _initialize_station(self):
@@ -48,7 +50,7 @@ class AlgorithmWrapper:
             print("⚠️ 算法不可用，使用模拟模式")
             return
         
-        if StationInfo is not None and Station is not None:
+        if Station is not None and StationInfo is not None:
             self.station_info = StationInfo()
             self.station = Station(self.station_info)
             print("✅ 冷站仿真算法初始化完成")
@@ -64,9 +66,6 @@ class AlgorithmWrapper:
     ) -> Iterator[Dict[str, Any]]:
         """
         流式运行仿真计算 - 每计算完一周立即 yield 结果
-        
-        Yields:
-            每周的仿真结果字典
         """
         if not ALGORITHM_AVAILABLE or self.station is None:
             print("⚠️ 算法不可用，使用模拟流式模式")
@@ -86,15 +85,16 @@ class AlgorithmWrapper:
         if load_col is None:
             raise ValueError("未找到负荷列")
         
-        print(f"检测到列: 负荷={load_col}, 温度={temp_col}, 含湿量={humid_col}")
-        
         total_weeks = 52
         hours_per_week = 168
         total_energy = 0.0
+        total_cooling_load = 0.0
+        total_q_station = 0.0
         cop_sum = 0.0
         cop_count = 0
         peak_cooling = 0.0
         all_weekly_results = []
+        all_hourly_data = []
         
         for week in range(1, total_weeks + 1):
             week_start = (week - 1) * hours_per_week
@@ -104,20 +104,23 @@ class AlgorithmWrapper:
             if len(week_data) == 0:
                 continue
             
-            # ===== 计算本周 =====
-            week_result = self._calculate_week(
+            # 计算本周
+            week_result, hourly_loads = self._calculate_week_with_hourly(
                 week_data,
                 temp_col,
                 humid_col,
                 load_col
             )
             
-            # ===== 立即 yield 本周结果（流式推送） =====
+            # 立即 yield 本周结果
             yield week_result
             
             # 累积汇总数据
             all_weekly_results.append(week_result)
+            all_hourly_data.extend(hourly_loads)
             total_energy += week_result.get('totalEnergyConsumption', 0)
+            total_cooling_load += week_result.get('totalCoolingLoad', 0)
+            total_q_station += week_result.get('totalQStation', 0)
             
             cop = week_result.get('avgSystemCop', 0)
             if cop > 0:
@@ -129,124 +132,112 @@ class AlgorithmWrapper:
             if week % 10 == 0:
                 print(f"仿真进度: {week}/{total_weeks} 周")
         
-        # 保存汇总结果到实例变量，供后续使用
+        # 保存汇总结果
         avg_cop = cop_sum / cop_count if cop_count > 0 else 0
         self._last_summary = {
             'totalEnergy': total_energy,
+            'totalCoolingLoad': total_cooling_load,
+            'totalQStation': total_q_station,
             'eui': total_energy / area if area > 0 else 0,
             'peakCoolingLoad': peak_cooling,
             'peakHeatingLoad': 0,
             'avgCop': avg_cop,
-            'carbonEmission': total_energy * 0.5
+            'carbonEmission': total_energy * 0.5,
+            'area': area
         }
         self._last_weekly_data = all_weekly_results
-        
-        print(f"仿真完成: 总能耗={total_energy:.2f} kWh")
     
-    def get_last_summary(self) -> Dict[str, Any]:
-        """获取最后一次仿真的汇总结果"""
-        return getattr(self, '_last_summary', {
-            'totalEnergy': 0,
-            'eui': 0,
-            'peakCoolingLoad': 0,
-            'peakHeatingLoad': 0,
-            'avgCop': 0,
-            'carbonEmission': 0
-        })
-    
-    def get_last_weekly_data(self) -> List[Dict[str, Any]]:
-        """获取最后一次仿真的周度数据"""
-        return getattr(self, '_last_weekly_data', [])
-    
-    def _calculate_week(
+    def _calculate_week_with_hourly(
         self, 
         week_data: pd.DataFrame, 
         temp_col: Optional[str], 
         humid_col: Optional[str], 
         load_col: str
-    ) -> Dict[str, Any]:
-        """计算一周的能耗"""
-        total_cooling_load = 0.0
-        total_energy = 0.0
+    ) -> tuple:
+        """计算一周的能耗，同时返回逐时数据"""
+        total_load = 0.0
+        peak_load = 0.0
+        total_Q_station = 0.0
+        total_P_station = 0.0
         cop_sum = 0.0
         cop_count = 0
-        peak_cooling = 0.0
-        temp_sum = 0.0
-        temp_count = 0
+        OutdoorTemp_sum = 0.0
+        OutdoorTemp_count = 0
+        
+        hourly_loads = []
+        hourly_Ps_station = []
         
         for _, row in week_data.iterrows():
             load = float(row[load_col]) if pd.notna(row[load_col]) else 0
+            load = max(load, 0)
+            hourly_loads.append(load)
+            if load > peak_load:
+                peak_load = load
+            total_load += load
             
             if temp_col and pd.notna(row[temp_col]):
-                temp = float(row[temp_col])
-                temp_sum += temp
-                temp_count += 1
+                OutdoorTemp = float(row[temp_col])
+                OutdoorTemp_sum += OutdoorTemp
+                OutdoorTemp_count += 1
             else:
-                temp = 25
+                OutdoorTemp = 25
             
             if humid_col and pd.notna(row[humid_col]):
                 humid = float(row[humid_col])
             else:
                 humid = 0.01
             
-            cooling_load = max(load, 0)
+            result = self._run_single_point(load, OutdoorTemp, humid)
             
-            # 运行单点仿真
-            result = self._run_single_point(abs(load), temp, humid)
-            
-            total_cooling_load += cooling_load
-            
+            '''
+            self.result = {
+                            '冷负荷(kWh)': load_building,
+                            '制冷量(kWh)': self.Q_station,
+                            '冷机耗电量(kWh)': self.P_chillers,
+                            '冷冻泵耗电量(kWh)': self.P_pumps_chw,
+                            '冷却泵耗电量(kWh)': self.P_pumps_cw,
+                            '冷却塔耗电量(kWh)': self.P_towers,
+                            '冷机COP': self.COP_chillers,
+                            '冷站EERs': self.EERs,
+                        }
+            '''
             if result:
-                # 获取单点能耗
-                # 冷站总耗电 = 冷机耗电 + 冷冻泵耗电 + 冷却泵耗电 + 冷却塔耗电
-                chiller_power = result.get('冷机耗电量(kWh)', 0)
-                pump_chw_power = result.get('冷冻泵耗电量(kWh)', 0)
-                pump_cw_power = result.get('冷却泵耗电量(kWh)', 0)
-                tower_power = result.get('冷却塔耗电量(kWh)', 0)
-                
-                # 确保耗电量为正数（如果为负数，取绝对值或设为0）
-                pump_cw_power = abs(pump_cw_power) if pump_cw_power < 0 else pump_cw_power
-                tower_power = abs(tower_power) if tower_power < 0 else tower_power
-                
-                # 总能耗
-                p_station = chiller_power + pump_chw_power + pump_cw_power + tower_power
-                total_energy += p_station
-                
-                # 从算法结果中获取 COP
+                Q_station = result.get('制冷量(kWh)', 0.0)
+                chiller_power = result.get('冷机耗电量(kWh)', 0.0)
                 cop = result.get('冷机COP', 0)
+                pump_chw_power = result.get('冷冻泵耗电量(kWh)', 0.0)
+                pump_cw_power = result.get('冷却泵耗电量(kWh)', 0.0)
+                tower_power = result.get('冷却塔耗电量(kWh)', 0.0)
+                
+                total_Q_station += Q_station
+                
+                p_station = chiller_power + pump_chw_power + pump_cw_power + tower_power
+                total_P_station += p_station
+                hourly_Ps_station.append(p_station)
+                
                 if cop and cop > 0:
                     cop_sum += cop
                     cop_count += 1
-                else:
-                    # 如果算法没有返回 COP，从能耗推算
-                    if chiller_power > 0 and cooling_load > 0:
-                        calculated_cop = cooling_load / chiller_power
-                        if calculated_cop > 0:
-                            cop_sum += calculated_cop
-                            cop_count += 1
-                
-                if cooling_load > peak_cooling:
-                    peak_cooling = cooling_load
+                elif chiller_power > 0 and Q_station > 0:
+                    cop_sum = Q_station / chiller_power
+                    cop_count += 1
         
-        avg_temp = temp_sum / temp_count if temp_count > 0 else 25
+        avgOutdoorTemp = OutdoorTemp_sum / OutdoorTemp_count if OutdoorTemp_count > 0 else 25
         week_number = int(week_data.index[0] // 168) + 1 if len(week_data) > 0 else 1
         
-        # 计算平均 COP
         avg_cop = cop_sum / cop_count if cop_count > 0 else 0
         
-        # ===== 打印调试日志 =====
-        print(f"📊 第 {week_number} 周: 能耗={total_energy:.2f} kWh, 负荷={total_cooling_load:.2f} kW, COP={avg_cop:.2f} (样本数: {cop_count})")
+        print(f"📊 第 {week_number} 周: 周总负荷={total_load:.2f} kW, 周总制冷量={total_Q_station} kW, 周总能耗={total_P_station:.2f} kWh, 平均COP={avg_cop:.2f}")
         
         return {
             'weekNumber': week_number,
-            'avgOutdoorTemp': avg_temp,
-            'totalCoolingLoad': total_cooling_load,
-            'totalHeatingLoad': 0,
-            'totalEnergyConsumption': total_energy,
-            'avgSystemCop': cop_sum / cop_count if cop_count > 0 else 0,
-            'peakCoolingLoad': peak_cooling,
-            'peakHeatingLoad': 0
-        }
+            'totalCoolingLoad': total_load,
+            'peakCoolingLoad': peak_load,
+            'totalQStation': total_Q_station,
+            'totalEnergyConsumption': total_P_station,
+            'avgSystemCop': avg_cop,
+            'avgOutdoorTemp': avgOutdoorTemp,
+        }, hourly_loads
     
     def _run_single_point(self, load: float, temp: float, humid: float) -> Optional[Dict[str, Any]]:
         """运行单点仿真"""
@@ -255,12 +246,6 @@ class AlgorithmWrapper:
         
         try:
             result = self.station(load, temp, humid)
-            if result:
-                # 确保 COP 字段存在
-                if '冷机COP' not in result and 'COP_chillers' in result:
-                    result['冷机COP'] = result['COP_chillers']
-                elif '冷机COP' not in result and 'cop' in result:
-                    result['冷机COP'] = result['cop']
             return result
         except Exception as e:
             print(f"❌ 单点仿真错误: {e}")
@@ -276,44 +261,53 @@ class AlgorithmWrapper:
                     return col
         return None
     
+    def get_last_summary(self) -> Dict[str, Any]:
+        """获取最后一次仿真的汇总结果"""
+        return self._last_summary
+    
+    def get_last_weekly_data(self) -> List[Dict[str, Any]]:
+        """获取最后一次仿真的周度数据"""
+        return self._last_weekly_data
+    
     def _run_mock_simulation_streaming(self, data: List[Dict[str, Any]], area: float = 2931.0) -> Iterator[Dict[str, Any]]:
         """模拟流式仿真"""
         print("⚠️ 使用模拟流式仿真")
         
-        total_energy = 0.0
-        peak_cooling = 0.0
+        total_P_station = 0.0
+        total_load = 0.0
+        peak_load = 0.0
         
         for week in range(1, 53):
-            week_energy = 1500 + random.uniform(0, 1500)
+            week_P_station = 1500 + random.uniform(0, 1500)
             cooling_load = 200 + random.uniform(0, 300)
             week_temp = 15 + 10 * math.sin((week / 52) * 2 * math.pi) + random.uniform(-2, 2)
             
             week_result = {
                 'weekNumber': week,
-                'avgOutdoorTemp': week_temp,
                 'totalCoolingLoad': cooling_load * 168,
-                'totalHeatingLoad': 0,
-                'totalEnergyConsumption': week_energy,
-                'avgSystemCop': 3.0 + random.uniform(0, 0.5),
                 'peakCoolingLoad': cooling_load,
-                'peakHeatingLoad': 0
+                'totalQStation': cooling_load * 168,
+                'totalEnergyConsumption': week_P_station,
+                'avgSystemCop': 3.0 + random.uniform(0, 0.5),
+                'avgOutdoorTemp': week_temp,
             }
             
-            total_energy += week_energy
-            if cooling_load > peak_cooling:
-                peak_cooling = cooling_load
+            total_P_station += week_P_station
+            total_load += cooling_load * 168
+            if cooling_load > peak_load:
+                peak_load = cooling_load
             
-            # ===== 立即 yield =====
             yield week_result
         
-        # 保存汇总
         self._last_summary = {
-            'totalEnergy': total_energy,
-            'eui': total_energy / area if area > 0 else 0,
-            'peakCoolingLoad': peak_cooling,
+            'totalEnergy': total_P_station,
+            'totalCoolingLoad': total_load,
+            'eui': total_P_station / area if area > 0 else 0,
+            'peakCoolingLoad': peak_load,
             'peakHeatingLoad': 0,
             'avgCop': 3.2,
-            'carbonEmission': total_energy * 0.5
+            'carbonEmission': total_P_station * 0.5,
+            'area': area
         }
 
 

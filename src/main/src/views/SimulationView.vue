@@ -137,8 +137,9 @@
                 </div>
             </template>
 
+            <!-- ===== 六个冷源站关键指标 ===== -->
             <el-row :gutter="20">
-                <el-col :span="6" v-for="item in resultSummary" :key="item.label">
+                <el-col :span="4" v-for="item in resultMetrics" :key="item.label">
                     <div class="result-item">
                         <div class="result-label">{{ item.label }}</div>
                         <div class="result-value" :style="{ color: item.color }">
@@ -149,6 +150,7 @@
                 </el-col>
             </el-row>
 
+            <!-- 雷达图 -->
             <div ref="radarChartRef" class="radar-chart-container"></div>
         </el-card>
     </div>
@@ -193,7 +195,7 @@ let startTime: Date | null = null
 // ===== 结果数据 =====
 const resultData = ref<any>(null)
 
-// ===== 指标数据 =====
+// ===== 指标数据（监控过程中显示） =====
 const metrics = ref([
     {
         label: '本周累计能耗',
@@ -225,17 +227,65 @@ const metrics = ref([
     }
 ])
 
-// ===== 结果汇总 =====
-const resultSummary = computed(() => {
+// ===== 六个冷源站关键指标（结果汇总） =====
+const resultMetrics = computed(() => {
     if (!resultData.value) return []
 
     const summary = resultData.value.summary
+    const weeklyData = resultData.value.weeklyData || []
+
+    // ===== 计算尖峰逐时冷负荷 =====
+    let peakCoolingLoad = 0
+    if (weeklyData && weeklyData.length > 0) {
+        const peakLoads = weeklyData.map((w: any) => w.peakCoolingLoad || 0)
+        peakCoolingLoad = peakLoads.length > 0 ? Math.max(...peakLoads) : 0
+    } else {
+        peakCoolingLoad = summary.peakCoolingLoad || 0
+    }
+
+    // ===== 计算冷源站综合平均能效 EERa =====
+    // EERa = 冷源站总供冷量 / 冷源站总耗电量
+    const totalQStation = summary.totalQStation || summary.totalCoolingLoad || 0
+    const totalEnergy = summary.totalEnergy || 0
+    const eera = totalEnergy > 0 ? totalQStation / totalEnergy : 0
+
     return [
-        { label: '总能耗', value: formatNumber(summary.totalEnergy), unit: 'kWh', color: '#409EFF' },
-        { label: '单位面积能耗 (EUI)', value: summary.eui ? summary.eui.toFixed(2) : '0.00', unit: 'kWh/m²', color: '#67C23A' },
-        { label: '峰值冷负荷', value: summary.peakCoolingLoad ? summary.peakCoolingLoad.toFixed(2) : '0.00', unit: 'kW', color: '#E6A23C' },
-        { label: '平均COP', value: summary.avgCop ? summary.avgCop.toFixed(2) : '0.00', unit: '-', color: '#F56C6C' },
-        { label: '碳排放量', value: formatNumber(summary.carbonEmission), unit: 'kg CO₂', color: '#909399' }
+        {
+            label: '建筑总冷负荷',
+            value: formatNumber(summary.totalCoolingLoad || 0),
+            unit: 'kWh',
+            color: '#409EFF'
+        },
+        {
+            label: '建筑尖峰冷负荷',
+            value: formatNumber(peakCoolingLoad),
+            unit: 'kW',
+            color: '#E6A23C'
+        },
+        {
+            label: '冷源站总供冷量',
+            value: formatNumber(summary.totalQStation || 0),
+            unit: 'kWh',
+            color: '#67C23A'
+        },
+        {
+            label: '冷源站总耗电量',
+            value: formatNumber(summary.totalEnergy || 0),
+            unit: 'kWh',
+            color: '#F56C6C'
+        },
+        {
+            label: '冷源站综合平均能效',
+            value: eera.toFixed(2),
+            unit: '-',
+            color: '#9B59B6'
+        },
+        {
+            label: '冷源站空调运行碳排放量',
+            value: formatNumber(summary.carbonEmission || 0),
+            unit: 'kg CO₂',
+            color: '#909399'
+        }
     ]
 })
 
@@ -252,8 +302,9 @@ const logs = ref<LogEntry[]>([])
 const chartData = ref({
     weeks: [] as string[],
     coolingLoad: [] as number[],
-    heatingLoad: [] as number[],
-    energyConsumption: [] as number[]
+    energyConsumption: [] as number[],
+    totalQStation: [] as number[],
+    peakCoolingLoad: [] as number[]
 })
 
 // ===== 计算属性 =====
@@ -341,10 +392,12 @@ const handleWebSocketMessage = (message: any) => {
                     }
                 ]
 
+                // ===== 更新图表数据 =====
                 chartData.value.weeks.push(`第${data.weekNumber}周`)
                 chartData.value.coolingLoad.push(data.totalCoolingLoad || 0)
-                chartData.value.heatingLoad.push(data.totalHeatingLoad || 0)
+                chartData.value.totalQStation.push(data.totalQStation || 0)
                 chartData.value.energyConsumption.push(data.totalEnergyConsumption || 0)
+                chartData.value.peakCoolingLoad.push(data.peakCoolingLoad || 0)
 
                 addLog(`📊 第${data.weekNumber}周数据已接收`, 'info')
                 updateChart()
@@ -460,8 +513,9 @@ const resetAllData = () => {
     chartData.value = {
         weeks: [],
         coolingLoad: [],
-        heatingLoad: [],
-        energyConsumption: []
+        energyConsumption: [],
+        totalQStation: [],
+        peakCoolingLoad: []
     }
 
     logs.value = []
@@ -477,7 +531,7 @@ const resetAllData = () => {
     }
 }
 
-// ===== 重新仿真（唯一声明） =====
+// ===== 重新仿真 =====
 const handleRestartSimulation = async () => {
     if (isRestarting.value) return
 
@@ -499,10 +553,8 @@ const handleRestartSimulation = async () => {
     addLog('🔄 开始重新仿真...', 'info')
 
     try {
-        // 重置数据显示
         resetAllData()
 
-        // 调用重新仿真 API（使用相同的 task_id）
         const response = await restartSimulation(taskId)
         addLog(`📤 已发送重新仿真请求，任务ID: ${taskId}`, 'info')
         addLog('⏳ 等待新的仿真数据...', 'info')
@@ -513,7 +565,6 @@ const handleRestartSimulation = async () => {
         estimatedRemaining.value = ''
 
         isRestarting.value = false
-
     } catch (error: any) {
         isRestarting.value = false
         const errorMsg = error.response?.data?.detail || error.message || '重新仿真失败'
@@ -530,12 +581,10 @@ const initChart = () => {
     chartInstance = echarts.init(chartRef.value)
 
     const coolingData = chartData.value.coolingLoad.filter(v => v > 0)
-    const heatingData = chartData.value.heatingLoad.filter(v => v > 0)
     const energyData = chartData.value.energyConsumption.filter(v => v > 0)
 
     const maxCooling = coolingData.length > 0 ? Math.max(...coolingData) : 100
-    const maxHeating = heatingData.length > 0 ? Math.max(...heatingData) : 100
-    const loadMax = Math.max(maxCooling, maxHeating) * 1.2
+    const loadMax = maxCooling * 1.2
 
     const maxEnergy = energyData.length > 0 ? Math.max(...energyData) : 1000
     const energyMax = Math.max(maxEnergy * 1.2, 100)
@@ -549,6 +598,8 @@ const initChart = () => {
                 params.forEach((p: any) => {
                     if (p.seriesName === '能耗') {
                         result += `${p.marker} ${p.seriesName}: ${p.value.toFixed(2)} kWh<br/>`
+                    } else if (p.seriesName === '供冷量') {
+                        result += `${p.marker} ${p.seriesName}: ${p.value.toFixed(2)} kWh<br/>`
                     } else {
                         result += `${p.marker} ${p.seriesName}: ${p.value.toFixed(2)} kW<br/>`
                     }
@@ -557,7 +608,7 @@ const initChart = () => {
             }
         },
         legend: {
-            data: ['制冷负荷', '制热负荷', '能耗'],
+            data: ['冷负荷', '供冷量', '能耗'],
             top: 0
         },
         grid: {
@@ -581,7 +632,7 @@ const initChart = () => {
         yAxis: [
             {
                 type: 'value',
-                name: '负荷 (kW)',
+                name: '负荷 / 供冷量 (kWh)',
                 nameTextStyle: { align: 'right' },
                 max: loadMax,
                 min: 0,
@@ -602,7 +653,7 @@ const initChart = () => {
         ],
         series: [
             {
-                name: '制冷负荷',
+                name: '冷负荷',
                 type: 'bar',
                 stack: 'load',
                 data: chartData.value.coolingLoad,
@@ -613,12 +664,12 @@ const initChart = () => {
                 barMaxWidth: 30
             },
             {
-                name: '制热负荷',
+                name: '供冷量',
                 type: 'bar',
                 stack: 'load',
-                data: chartData.value.heatingLoad,
+                data: chartData.value.totalQStation,
                 itemStyle: {
-                    color: '#F56C6C',
+                    color: '#67C23A',
                     borderRadius: [2, 2, 0, 0]
                 },
                 barMaxWidth: 30
@@ -629,18 +680,18 @@ const initChart = () => {
                 yAxisIndex: 1,
                 data: chartData.value.energyConsumption,
                 itemStyle: {
-                    color: '#67C23A'
+                    color: '#F56C6C'
                 },
                 lineStyle: {
                     width: 3,
                     shadowBlur: 4,
-                    shadowColor: 'rgba(103, 194, 58, 0.3)'
+                    shadowColor: 'rgba(245, 108, 108, 0.3)'
                 },
                 smooth: true,
                 symbol: 'diamond',
                 symbolSize: 8,
                 areaStyle: {
-                    color: 'rgba(103, 194, 58, 0.15)'
+                    color: 'rgba(245, 108, 108, 0.15)'
                 }
             }
         ]
@@ -654,12 +705,12 @@ const updateChart = () => {
     if (!chartInstance) return
 
     const coolingData = chartData.value.coolingLoad.filter(v => v > 0)
-    const heatingData = chartData.value.heatingLoad.filter(v => v > 0)
     const energyData = chartData.value.energyConsumption.filter(v => v > 0)
+    const qStationData = chartData.value.totalQStation.filter(v => v > 0)
 
     const maxCooling = coolingData.length > 0 ? Math.max(...coolingData) : 100
-    const maxHeating = heatingData.length > 0 ? Math.max(...heatingData) : 100
-    const loadMax = Math.max(maxCooling, maxHeating) * 1.2
+    const maxQStation = qStationData.length > 0 ? Math.max(...qStationData) : 100
+    const loadMax = Math.max(maxCooling, maxQStation) * 1.2
 
     const maxEnergy = energyData.length > 0 ? Math.max(...energyData) : 1000
     const energyMax = Math.max(maxEnergy * 1.2, 100)
@@ -678,7 +729,7 @@ const updateChart = () => {
         ],
         series: [
             { data: chartData.value.coolingLoad },
-            { data: chartData.value.heatingLoad },
+            { data: chartData.value.totalQStation },
             { data: chartData.value.energyConsumption, yAxisIndex: 1 }
         ]
     }
@@ -686,46 +737,81 @@ const updateChart = () => {
     chartInstance.setOption(option)
 }
 
-// ===== 雷达图 =====
+// ===== 雷达图（五维冷源站指标） =====
 const initRadarChart = () => {
     if (!radarChartRef.value || !resultData.value) return
 
     radarChartInstance = echarts.init(radarChartRef.value)
 
     const summary = resultData.value.summary
+    const weeklyData = resultData.value.weeklyData || []
 
-    const copMax = Math.max(summary.avgCop * 1.5, 5)
-    const euiMax = Math.max(summary.eui * 1.5, 50)
-    const carbonMax = Math.max(summary.carbonEmission * 1.5, 10000)
-    const loadMax = 100
-    const loadRate = Math.min((summary.peakCoolingLoad / 500) * 100, 100)
+    // ===== 五维参数计算 =====
+
+    // 1. 冷源站综合平均能效 EERa
+    const totalQStation = summary.totalQStation || summary.totalCoolingLoad || 0
+    const totalEnergy = summary.totalEnergy || 0
+    const eera = totalEnergy > 0 ? totalQStation / totalEnergy : 0
+
+    // 2. 全年平均负荷率
+    const designLoad = 500
+    let avgCoolingLoad = 0
+
+    if (weeklyData && weeklyData.length > 0) {
+        const totalLoad = weeklyData.reduce((a: number, b: any) => a + (b.coolingLoad || 0), 0)
+        const totalHours = weeklyData.length * 168
+        avgCoolingLoad = totalHours > 0 ? totalLoad / totalHours : 0
+    }
+
+    const avgLoadRate = designLoad > 0 ? Math.min((avgCoolingLoad / designLoad) * 100, 100) : 0
+
+    // 3. 单位面积供冷量 (kWh/m²)
+    const area = summary.area || 2931
+    const unitQStation = area > 0 ? totalQStation / area : 0
+
+    // 4. 单位面积耗电量 (kWh/m²)
+    const unitEnergy = area > 0 ? totalEnergy / area : 0
+
+    // 5. 单位面积碳排放量 (kg CO₂/m²)
+    const carbonEmission = summary.carbonEmission || 0
+    const unitCarbon = area > 0 ? carbonEmission / area : 0
+
+    // ===== 各维度最大值 =====
+    const maxEera = Math.max(eera * 1.5, 5)
+    const maxLoadRate = 100
+    const maxUnitQStation = Math.max(unitQStation * 1.5, 50)
+    const maxUnitEnergy = Math.max(unitEnergy * 1.5, 20)
+    const maxUnitCarbon = Math.max(unitCarbon * 1.5, 10)
 
     const option = {
         tooltip: {
             trigger: 'item',
             formatter: function (params: any) {
                 let result = `<strong>${params.name}</strong><br/>`
-                const names = ['能效 (COP)', '经济性 (EUI)', '环保性 (碳排放)', '负荷率']
-                const units = ['', ' kWh/m²', ' kg CO₂', ' %']
+                const names = ['综合平均能效 EERa', '全年平均负荷率', '单位面积供冷量', '单位面积耗电量', '单位面积碳排放']
+                const units = ['', ' %', ' kWh/m²', ' kWh/m²', ' kg CO₂/m²']
+                const values = [eera, avgLoadRate, unitQStation, unitEnergy, unitCarbon]
                 params.value.forEach((val: number, index: number) => {
-                    result += `${names[index]}: ${val.toFixed(2)}${units[index]}<br/>`
+                    const displayVal = index === 0 ? values[index].toFixed(2) : values[index].toFixed(1)
+                    result += `${names[index]}: ${displayVal}${units[index]}<br/>`
                 })
                 return result
             }
         },
         radar: {
             indicator: [
-                { name: '能效 (COP)', max: copMax, color: '#409EFF' },
-                { name: '经济性 (EUI)', max: euiMax, color: '#67C23A' },
-                { name: '环保性 (碳排放)', max: carbonMax, color: '#E6A23C' },
-                { name: '负荷率', max: loadMax, color: '#F56C6C' }
+                { name: '综合平均能效 EERa', max: maxEera, color: '#9B59B6' },
+                { name: '全年平均负荷率', max: maxLoadRate, color: '#67C23A' },
+                { name: '单位面积供冷量', max: maxUnitQStation, color: '#409EFF' },
+                { name: '单位面积耗电量', max: maxUnitEnergy, color: '#F56C6C' },
+                { name: '单位面积碳排放', max: maxUnitCarbon, color: '#909399' }
             ],
             shape: 'circle',
             center: ['50%', '50%'],
             radius: '65%',
             axisName: {
                 color: '#333',
-                fontSize: 12,
+                fontSize: 11,
                 borderRadius: 4,
                 padding: [2, 4]
             },
@@ -745,7 +831,7 @@ const initRadarChart = () => {
                 type: 'radar',
                 data: [
                     {
-                        value: [summary.avgCop, summary.eui, summary.carbonEmission, loadRate],
+                        value: [eera, avgLoadRate, unitQStation, unitEnergy, unitCarbon],
                         name: '当前方案',
                         areaStyle: {
                             color: 'rgba(64, 158, 255, 0.3)'
@@ -759,7 +845,11 @@ const initRadarChart = () => {
                         },
                         label: {
                             show: true,
-                            formatter: (params: any) => params.value.toFixed(1),
+                            formatter: (params: any) => {
+                                const values = [eera, avgLoadRate, unitQStation, unitEnergy, unitCarbon]
+                                const val = values[params.dataIndex] || 0
+                                return val.toFixed(1)
+                            },
                             fontSize: 10,
                             color: '#333'
                         }
@@ -890,7 +980,6 @@ watch(resultData, () => {
 </script>
 
 <style scoped>
-/* ... 样式保持不变 ... */
 .simulation-view {
     padding: 0;
 }
@@ -1141,7 +1230,7 @@ watch(resultData, () => {
 }
 
 .result-value {
-    font-size: 28px;
+    font-size: 22px;
     font-weight: bold;
     line-height: 1.2;
 }

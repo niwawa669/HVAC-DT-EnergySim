@@ -47,9 +47,9 @@ class StationInfo:
     Hr_pump_chw_SCH: float = 32.0 # 小机冷冻泵设计杨程  mH2O
     
     Gr_pump_cw_BCH: float = 126.1 # 大机冷却泵设计流量 L/s 155.0/25.5
-    Hr_pump_cw_BCH: float = 25.0 # 大机冷却泵设计杨程  mH2O
+    Hr_pump_cw_BCH: float = 30.0 # 大机冷却泵设计杨程  mH2O
     Gr_pump_cw_SCH: float = 64.0 # 小机冷却泵设计流量 L/s
-    Hr_pump_cw_SCH: float = 25.0 # 小机冷却泵设计杨程  mH2O
+    Hr_pump_cw_SCH: float = 30.0 # 小机冷却泵设计杨程  mH2O
     
     Gr_tower_BCH: float = 200.0 # 大机冷却塔设计流量 L/s 200.0L/s / 32.0℃/23.65℃ / 36.0℃/30.44℃ / 58910m^3/h / 22kW
     Pr_tower_BCH: float = 22.0 # 大机冷却塔设计功率 kW
@@ -65,9 +65,9 @@ class Station:
     def __init__(self, station_info: StationInfo):
         self.station_info = station_info
         
-        self.ratio_load_SCH = self.station_info.Qr_chiller_SCH / (self.station_info.Qr_chiller_BCH * 3 + self.station_info.Qr_chiller_SCH)
-        self.load_building_r_SCH = self.station_info.load_building_r * self.ratio_load_SCH
-        self.load_building_r_BCH = self.station_info.load_building_r * (1.0 - self.ratio_load_SCH)
+        self.ratio_load_r_SCH = self.station_info.Qr_chiller_SCH / (self.station_info.Qr_chiller_BCH * 3 + self.station_info.Qr_chiller_SCH)
+        self.load_building_r_SCH = self.station_info.load_building_r * self.ratio_load_r_SCH
+        self.load_building_r_BCH = self.station_info.load_building_r * (1.0 - self.ratio_load_r_SCH)
         self.channel_info_SCH = ChannelInfo(
             load_building_r=self.load_building_r_SCH,
             load_coe=1.0,
@@ -132,6 +132,7 @@ class Station:
         self.n_design_list = self.station_info.n_design_list
         
         self.n_active_list = []
+        self.ratio_load_SCH = float('inf')
         self.Q_station = 0.0
         self.P_station = 0.0
         self.P_chillers = 0.0
@@ -156,6 +157,13 @@ class Station:
         self.ta_wet_W = td_b(ta_dry_W, da_W)
 
         self.n_active_list = self.get_n_active_list(load_building)
+        if self.n_active_list[1] == 0.0:
+            self.ratio_load_SCH = float('inf')
+        elif self.n_active_list[0] == 0.0:
+            self.ratio_load_SCH = 0.0
+        else:
+            self.ratio_load_SCH = self.ratio_load_r_SCH
+        
         if sum(self.n_active_list) <= 0:
             self.Q_station = 0.0
             self.P_station = 0.0
@@ -171,11 +179,22 @@ class Station:
             self.tr_chw = self.ts_chw + self.station_info.delta_t_chw
             self.Gw_chw  = self.Q_station / 4.187 / self.station_info.delta_t_chw
             
-            load_building_SCH = load_building * self.ratio_load_SCH
-            self.channel_SCH(load_building_SCH, self.ta_dry_W, self.da_W, self.n_active_list[0])
-            load_building_Bch = load_building * (1.0 - self.ratio_load_SCH)
-            self.channel_BCH(load_building_Bch, self.ta_dry_W, self.da_W, self.n_active_list[1])
+            if self.ratio_load_SCH == self.ratio_load_r_SCH:
+                load_building_SCH = load_building * self.ratio_load_SCH
+                self.channel_SCH(load_building_SCH, self.ta_dry_W, self.da_W, self.n_active_list[0])
+                load_building_Bch = load_building * (1.0 - self.ratio_load_SCH)
+                self.channel_BCH(load_building_Bch, self.ta_dry_W, self.da_W, self.n_active_list[1])
+            else:
+                if self.ratio_load_SCH == 0.0:
+                    self.channel_SCH(0.0, self.ta_dry_W, self.da_W, self.n_active_list[0])
+                    load_building_Bch = load_building
+                    self.channel_BCH(load_building_Bch, self.ta_dry_W, self.da_W, self.n_active_list[1])
+                else:
+                    load_building_SCH = load_building
+                    self.channel_SCH(load_building_SCH, self.ta_dry_W, self.da_W, self.n_active_list[0])
+                    self.channel_BCH(0.0, self.ta_dry_W, self.da_W, self.n_active_list[1])
             self.Gw_cw = self.channel_SCH.Gw_cw + self.channel_BCH.Gw_cw
+            
             if self.Gw_cw > 0:
                 self.tr_cw = (self.channel_SCH.Gw_cw * self.channel_SCH.tr_cw + \
                     self.channel_BCH.Gw_cw * self.channel_BCH.tr_cw) / self.Gw_cw
@@ -198,16 +217,16 @@ class Station:
             else:
                 self.COP_chillers = 0.0
             
-            self.result = {
-                '冷负荷(kWh)': load_building,
-                '制冷量(kWh)': self.Q_station,
-                '冷机耗电量(kWh)': self.P_chillers,
-                '冷冻泵耗电量(kWh)': self.P_pumps_chw,
-                '冷却泵耗电量(kWh)': self.P_pumps_cw,
-                '冷却塔耗电量(kWh)': self.P_towers,
-                '冷机COP': self.COP_chillers,
-                '冷站EERs': self.EERs,
-            }
+        self.result = {
+            '冷负荷(kWh)': load_building,
+            '制冷量(kWh)': self.Q_station,
+            '冷机耗电量(kWh)': self.P_chillers,
+            '冷冻泵耗电量(kWh)': self.P_pumps_chw,
+            '冷却泵耗电量(kWh)': self.P_pumps_cw,
+            '冷却塔耗电量(kWh)': self.P_towers,
+            '冷机COP': self.COP_chillers,
+            '冷站EERs': self.EERs,
+        }
         return self.result
     
     def get_n_active_list(self, load):
@@ -236,9 +255,9 @@ class Station:
 
 if __name__ == '__main__':
     
-    load = 196572.0
-    t_dry_W = 31.7
-    da_W = 0.02347
+    load = 0.0 # 196572.0  1.17,0.0019199999999999998,0.0
+    t_dry_W = 1.17 # 31.7
+    da_W = 0.002 # 0.02347
     
     station_info = StationInfo() # 仿真计算条件，包括暖通设计工况参数、设备设计参数和控制策略参数
     station = Station(station_info)

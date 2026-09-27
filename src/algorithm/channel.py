@@ -167,13 +167,18 @@ class Channel:
             P_chiller = self.chiller(self.load_chiller, self.tr_chw, self.ts_chw, tr_cw, self.ts_cw)
             Q = self.chiller.Q_r * self.load_chiller
             Gw_chw_chiller = Q / 4.187 / self.channel_info.delta_t_chw
+            if Gw_chw_chiller < self.pump_chw.G_min:
+                Gw_chw_chiller = self.pump_chw.G_min
             self.H_pump_chw = self.hydraulic_calculation_chw(Gw_chw_chiller)
             P_pump_chw, Gw_pump_chw_max, _, _ = self.pump_chw(Gw_chw_chiller, self.H_pump_chw)
             if Gw_chw_chiller > Gw_pump_chw_max:
                 Gw_chw_chiller = Gw_pump_chw_max
                 self.H_pump_chw = self.hydraulic_calculation_chw(Gw_chw_chiller)
                 P_pump_chw, _, _, _ = self.pump_chw(Gw_chw_chiller, self.H_pump_chw)
+
             Gw_cw_chiller = (Q + P_chiller) / 4.187 / self.channel_info.delta_t_cw
+            if Gw_cw_chiller < self.pump_cw.G_min:
+                Gw_cw_chiller = self.pump_cw.G_min
             self.H_pump_cw = self.hydraulic_calculation_cw(Gw_cw_chiller)
             P_pump_cw, Gw_pump_cw_max, _, _ = self.pump_cw(Gw_cw_chiller, self.H_pump_cw)
             if Gw_cw_chiller > Gw_pump_cw_max:
@@ -181,6 +186,8 @@ class Channel:
                 self.H_pump_cw = self.hydraulic_calculation_cw(Gw_cw_chiller)
                 P_pump_cw, _, _, _ = self.pump_cw(Gw_cw_chiller, self.H_pump_cw)
             Ga_tower = self.tower.Ga_r * self.ratio_Ga_tower
+            if Ga_tower < self.tower.Ga_min:
+                Ga_tower = self.tower.Ga_min
             tr_cw_tmp, P_tower = self.tower(self.ta_dry_W, self.da_W, self.ts_cw, Gw_cw_chiller, Ga_tower)
             
             # 分别计算所有在线冷机、泵和塔的功率总和，以及冷却回水温度tr_cw_tmp

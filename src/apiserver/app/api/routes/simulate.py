@@ -1,9 +1,8 @@
-import asyncio
-
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import Dict, Any
 from datetime import datetime
 import uuid
+import asyncio
 
 from app.models.schemas import (
     StartSimulationRequest,
@@ -50,11 +49,9 @@ async def start_simulation(
         
         print(f"🚀 创建仿真任务: {task_id}")
         
-        # ===== 使用 BackgroundTasks 替代 asyncio.create_task =====
-        background_tasks.add_task(
-            simulation_service._run_simulation_task,
-            task_id,
-            request_dict
+        # 使用 asyncio.create_task 异步执行
+        asyncio.create_task(
+            simulation_service._run_simulation_task(task_id, request_dict)
         )
         
         return TaskResponse(
@@ -82,6 +79,11 @@ async def get_simulation_status(
     if not status:
         raise HTTPException(status_code=404, detail="任务不存在")
     
+    # 检查用户权限
+    if status.get("user_id") != current_user.get("id"):
+        if current_user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="无权访问此任务")
+    
     return TaskResponse(
         taskId=task_id,
         status=TaskStatus(status["status"]),
@@ -105,6 +107,11 @@ async def cancel_simulation(
     if not status:
         raise HTTPException(status_code=404, detail="任务不存在")
     
+    # 检查用户权限
+    if status.get("user_id") != current_user.get("id"):
+        if current_user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="无权操作此任务")
+    
     if status["status"] in ["completed", "failed", "cancelled"]:
         raise HTTPException(status_code=400, detail="任务已完成或已取消")
     
@@ -113,44 +120,15 @@ async def cancel_simulation(
     if not success:
         raise HTTPException(status_code=400, detail="取消任务失败")
     
-    return {"message": "仿真已取消", "taskId": task_id}
-
-
-@router.get("/results/{task_id}", response_model=SimulationResultResponse)
-async def get_simulation_results(
-    task_id: str,
-    current_user: Dict = Depends(get_current_user)
-):
-    """获取仿真结果"""
-    status = simulation_service.get_task_status(task_id)
-    
-    if not status:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    
-    if status["status"] != "completed":
-        raise HTTPException(status_code=400, detail="任务尚未完成")
-    
-    result = status.get("result")
-    
-    if not result:
-        raise HTTPException(status_code=404, detail="结果不存在")
-    
-    return SimulationResultResponse(
-        taskId=task_id,
-        projectId=1,
-        summary=SimulationSummary(**result["summary"]),
-        weeklyData=[WeeklyData(**item) for item in result["weekly_data"]],
-        createdAt=status.get("started_at", datetime.now().isoformat())
+    # 通过 WebSocket 通知
+    asyncio.create_task(
+        simulation_service._send_websocket_message(task_id, {
+            "type": "cancelled",
+            "message": "仿真任务已取消"
+        })
     )
-
-
-@router.get("/list")
-async def list_simulations(
-    current_user: Dict = Depends(get_current_user)
-):
-    """获取用户的所有仿真任务"""
-    tasks = simulation_service.list_user_tasks(current_user.get("id", 1))
-    return {"tasks": tasks, "total": len(tasks)}
+    
+    return {"message": "仿真已取消", "taskId": task_id}
 
 
 @router.post("/restart/{task_id}", response_model=TaskResponse)
@@ -160,7 +138,6 @@ async def restart_simulation(
 ):
     """重新仿真 - 使用相同的任务ID重新计算"""
     try:
-        # 检查任务是否存在
         status = simulation_service.get_task_status(task_id)
         
         if not status:
@@ -200,3 +177,82 @@ async def restart_simulation(
     except Exception as e:
         print(f"❌ 重新仿真失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/results/{task_id}", response_model=SimulationResultResponse)
+async def get_simulation_results(
+    task_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """获取仿真结果"""
+    status = simulation_service.get_task_status(task_id)
+    
+    if not status:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    
+    # 检查用户权限
+    if status.get("user_id") != current_user.get("id"):
+        if current_user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="无权访问此任务")
+    
+    if status["status"] != "completed":
+        raise HTTPException(status_code=400, detail="任务尚未完成")
+    
+    result = status.get("result")
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="结果不存在")
+    
+    summary = result.get("summary", {})
+    weekly_data = result.get("weekly_data", [])
+    
+    return SimulationResultResponse(
+        taskId=task_id,
+        projectId=1,  # 实际项目中从数据库获取
+        summary=SimulationSummary(
+            totalEnergy=summary.get("totalEnergy", 0),
+            totalCoolingLoad=summary.get("totalCoolingLoad", 0),
+            totalQStation=summary.get("totalQStation", summary.get("totalCoolingLoad", 0)),
+            peakCoolingLoad=summary.get("peakCoolingLoad", 0),
+            eui=summary.get("eui", 0),
+            avgCop=summary.get("avgCop", 0),
+            carbonEmission=summary.get("carbonEmission", 0)
+        ),
+        weeklyData=[WeeklyData(
+            weekNumber=w.get("weekNumber", 0),
+            totalCoolingLoad=w.get("totalCoolingLoad", 0),
+            peakCoolingLoad=w.get("peakCoolingLoad", 0),
+            totalQStation=w.get("totalQStation", 0),
+            totalEnergyConsumption=w.get("totalEnergyConsumption", 0),
+            avgSystemCop=w.get("avgSystemCop", 0),
+            avgOutdoorTemp=w.get("avgOutdoorTemp", 0)
+        ) for w in weekly_data],
+        createdAt=status.get("started_at", datetime.now().isoformat())
+    )
+
+
+@router.get("/list")
+async def list_simulations(
+    current_user: Dict = Depends(get_current_user)
+):
+    """获取用户的所有仿真任务列表"""
+    tasks = []
+    for task_id, status in simulation_service.tasks.items():
+        # 只返回当前用户的任务或管理员查看所有
+        if status.get("user_id") == current_user.get("id") or current_user.get("role") == "admin":
+            tasks.append({
+                "taskId": task_id,
+                "status": status.get("status"),
+                "progress": status.get("progress", 0),
+                "projectName": status.get("project_name"),
+                "startedAt": status.get("started_at"),
+                "updatedAt": status.get("updated_at")
+            })
+    
+    # 按更新时间倒序排列
+    tasks.sort(key=lambda x: x.get("updatedAt", ""), reverse=True)
+    
+    return {
+        "tasks": tasks,
+        "total": len(tasks)
+    }

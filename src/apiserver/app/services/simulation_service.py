@@ -33,10 +33,15 @@ class SimulationService:
                 message_str = json.dumps(message)
                 await ws.send_text(message_str)
                 print(f"📤 发送 WebSocket 消息到 {task_id}: {message.get('type')}")
+                return True
             except Exception as e:
                 print(f"❌ 发送 WebSocket 消息失败: {e}")
+                if task_id in self.websocket_connections:
+                    del self.websocket_connections[task_id]
+                return False
         else:
             print(f"⚠️ WebSocket 连接不存在: {task_id}")
+            return False
     
     async def start_simulation(self, request_data: Dict[str, Any]) -> str:
         """启动仿真"""
@@ -73,7 +78,6 @@ class SimulationService:
                 self.tasks[task_id]["status"] = "running"
                 self.tasks[task_id]["updated_at"] = datetime.now().isoformat()
             
-            # ===== 发送开始通知 =====
             await self._send_websocket_message(task_id, {
                 "type": "started",
                 "message": "仿真开始计算..."
@@ -85,8 +89,7 @@ class SimulationService:
             
             print(f"📊 数据行数: {len(rows)}, 建筑面积: {area} m²")
             
-            # ===== 流式调用算法：每计算完一周立即推送 =====
-            total_weeks = 0
+            # ===== 流式调用算法 =====
             week_count = 0
             
             for week_result in algorithm_wrapper.run_simulation_streaming(
@@ -97,42 +100,35 @@ class SimulationService:
                 week_count += 1
                 week_number = week_result.get('weekNumber', week_count)
                 progress = int((week_count / 52) * 100) if week_count <= 52 else 100
-                total_weeks = week_count
                 
-                # ===== 打印推送的能耗值 =====
-                energy = week_result.get('totalEnergyConsumption', 0)
-                print(f"📤 推送第 {week_number} 周: 能耗={energy:.2f} kWh")
-                
-                # 更新任务状态
                 if task_id in self.tasks:
                     self.tasks[task_id]["progress"] = progress
                     self.tasks[task_id]["current_week"] = week_number
                     self.tasks[task_id]["updated_at"] = datetime.now().isoformat()
                 
-                # ===== 立即推送本周数据 =====
+                # ===== 推送本周数据（适配新结构） =====
                 await self._send_websocket_message(task_id, {
                     "type": "progress",
                     "data": {
                         "weekNumber": week_number,
                         "progressPercentage": progress,
-                        "totalEnergyConsumption": energy,  # 确保字段名正确
                         "totalCoolingLoad": week_result.get('totalCoolingLoad', 0),
-                        "totalHeatingLoad": week_result.get('totalHeatingLoad', 0),
-                        "avgOutdoorTemp": week_result.get('avgOutdoorTemp', 0),
-                        "avgSystemCop": week_result.get('avgSystemCop', 0)
+                        "peakCoolingLoad": week_result.get('peakCoolingLoad', 0),
+                        "totalQStation": week_result.get('totalQStation', 0),
+                        "totalEnergyConsumption": week_result.get('totalEnergyConsumption', 0),
+                        "avgSystemCop": week_result.get('avgSystemCop', 0),
+                        "avgOutdoorTemp": week_result.get('avgOutdoorTemp', 0)
                     }
                 })
                 
                 print(f"📤 已推送第 {week_number} 周数据，进度 {progress}%")
                 
-                # 小延迟，避免推送过快
                 await asyncio.sleep(0.02)
             
             # ===== 获取汇总结果 =====
             summary = algorithm_wrapper.get_last_summary()
             weekly_results = algorithm_wrapper.get_last_weekly_data()
             
-            # 更新任务状态为完成
             if task_id in self.tasks:
                 self.tasks[task_id]["status"] = "completed"
                 self.tasks[task_id]["progress"] = 100
@@ -145,7 +141,16 @@ class SimulationService:
             # ===== 发送完成消息 =====
             await self._send_websocket_message(task_id, {
                 "type": "completed",
-                "summary": summary
+                "summary": {
+                    "totalEnergy": summary.get('totalEnergy', 0),
+                    "totalCoolingLoad": summary.get('totalCoolingLoad', 0),
+                    "totalQStation": summary.get('totalQStation', 0),
+                    "peakCoolingLoad": summary.get('peakCoolingLoad', 0),
+                    "eui": summary.get('eui', 0),
+                    "avgCop": summary.get('avgCop', 0),
+                    "carbonEmission": summary.get('carbonEmission', 0),
+                    "area": summary.get('area', 0)
+                }
             })
             
             print(f"✅ 仿真任务 {task_id} 完成")
@@ -165,6 +170,22 @@ class SimulationService:
                 "type": "failed",
                 "error": error_msg
             })
+    
+    def reset_task(self, task_id: str) -> bool:
+        """重置任务状态，保留数据用于重新仿真"""
+        if task_id not in self.tasks:
+            return False
+        
+        self.tasks[task_id]["status"] = "pending"
+        self.tasks[task_id]["progress"] = 0
+        self.tasks[task_id]["current_week"] = 0
+        self.tasks[task_id]["started_at"] = datetime.now().isoformat()
+        self.tasks[task_id]["updated_at"] = datetime.now().isoformat()
+        self.tasks[task_id]["result"] = None
+        self.tasks[task_id]["error"] = None
+        
+        print(f"🔄 任务已重置: {task_id}")
+        return True
     
     def get_task_status(self, task_id: str) -> Optional[Dict]:
         """获取任务状态"""
@@ -198,23 +219,6 @@ class SimulationService:
                     "updatedAt": status.get("updated_at")
                 })
         return sorted(tasks, key=lambda x: x.get("updatedAt", ""), reverse=True)
-    
-    def reset_task(self, task_id: str) -> bool:
-        """重置任务状态，保留数据用于重新仿真"""
-        if task_id not in self.tasks:
-            return False
-        
-        # 重置任务状态，保留原始数据
-        self.tasks[task_id]["status"] = "pending"
-        self.tasks[task_id]["progress"] = 0
-        self.tasks[task_id]["current_week"] = 0
-        self.tasks[task_id]["started_at"] = datetime.now().isoformat()
-        self.tasks[task_id]["updated_at"] = datetime.now().isoformat()
-        self.tasks[task_id]["result"] = None
-        self.tasks[task_id]["error"] = None
-        
-        print(f"🔄 任务已重置: {task_id}")
-        return True
 
 
 # 单例
