@@ -59,6 +59,7 @@ class SimulationService:
             "project_name": request_data.get("projectName"),
             "building_type": request_data.get("buildingType"),
             "area": request_data.get("area", 2931.0),
+            "user_id": 1,
             "result": None,
             "error": None
         }
@@ -88,8 +89,9 @@ class SimulationService:
             area = request_data.get("area", 2931.0)
             
             print(f"📊 数据行数: {len(rows)}, 建筑面积: {area} m²")
+            print(f"📋 配置参数: {config.get('Qr_chiller_BCH')} kW 大机, {config.get('Qr_chiller_SCH')} kW 小机")
             
-            # ===== 流式调用算法 =====
+            # ===== 流式调用算法（传入 config） =====
             week_count = 0
             
             for week_result in algorithm_wrapper.run_simulation_streaming(
@@ -106,7 +108,7 @@ class SimulationService:
                     self.tasks[task_id]["current_week"] = week_number
                     self.tasks[task_id]["updated_at"] = datetime.now().isoformat()
                 
-                # ===== 推送本周数据（适配新结构） =====
+                # ===== 推送本周数据 =====
                 await self._send_websocket_message(task_id, {
                     "type": "progress",
                     "data": {

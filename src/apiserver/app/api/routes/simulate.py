@@ -48,8 +48,9 @@ async def start_simulation(
         }
         
         print(f"🚀 创建仿真任务: {task_id}")
+        print(f"📋 配置参数: 大机 {request_dict.get('config', {}).get('Qr_chiller_BCH')} kW, "
+              f"小机 {request_dict.get('config', {}).get('Qr_chiller_SCH')} kW")
         
-        # 使用 asyncio.create_task 异步执行
         asyncio.create_task(
             simulation_service._run_simulation_task(task_id, request_dict)
         )
@@ -65,6 +66,8 @@ async def start_simulation(
         
     except Exception as e:
         print(f"❌ 启动仿真失败: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -79,7 +82,6 @@ async def get_simulation_status(
     if not status:
         raise HTTPException(status_code=404, detail="任务不存在")
     
-    # 检查用户权限
     if status.get("user_id") != current_user.get("id"):
         if current_user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="无权访问此任务")
@@ -107,7 +109,6 @@ async def cancel_simulation(
     if not status:
         raise HTTPException(status_code=404, detail="任务不存在")
     
-    # 检查用户权限
     if status.get("user_id") != current_user.get("id"):
         if current_user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="无权操作此任务")
@@ -120,7 +121,6 @@ async def cancel_simulation(
     if not success:
         raise HTTPException(status_code=400, detail="取消任务失败")
     
-    # 通过 WebSocket 通知
     asyncio.create_task(
         simulation_service._send_websocket_message(task_id, {
             "type": "cancelled",
@@ -143,15 +143,12 @@ async def restart_simulation(
         if not status:
             raise HTTPException(status_code=404, detail="任务不存在")
         
-        # 检查用户权限
         if status.get("user_id") != current_user.get("id"):
             if current_user.get("role") != "admin":
                 raise HTTPException(status_code=403, detail="无权操作此任务")
         
-        # 重置任务状态
         simulation_service.reset_task(task_id)
         
-        # 获取原始数据
         request_data = {
             "config": status.get("config"),
             "data": status.get("data"),
@@ -160,7 +157,6 @@ async def restart_simulation(
             "area": status.get("area", 2931.0)
         }
         
-        # 重新启动仿真
         asyncio.create_task(
             simulation_service._run_simulation_task(task_id, request_data)
         )
@@ -190,7 +186,6 @@ async def get_simulation_results(
     if not status:
         raise HTTPException(status_code=404, detail="任务不存在")
     
-    # 检查用户权限
     if status.get("user_id") != current_user.get("id"):
         if current_user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="无权访问此任务")
@@ -208,7 +203,7 @@ async def get_simulation_results(
     
     return SimulationResultResponse(
         taskId=task_id,
-        projectId=1,  # 实际项目中从数据库获取
+        projectId=1,
         summary=SimulationSummary(
             totalEnergy=summary.get("totalEnergy", 0),
             totalCoolingLoad=summary.get("totalCoolingLoad", 0),
@@ -238,7 +233,6 @@ async def list_simulations(
     """获取用户的所有仿真任务列表"""
     tasks = []
     for task_id, status in simulation_service.tasks.items():
-        # 只返回当前用户的任务或管理员查看所有
         if status.get("user_id") == current_user.get("id") or current_user.get("role") == "admin":
             tasks.append({
                 "taskId": task_id,
@@ -249,7 +243,6 @@ async def list_simulations(
                 "updatedAt": status.get("updated_at")
             })
     
-    # 按更新时间倒序排列
     tasks.sort(key=lambda x: x.get("updatedAt", ""), reverse=True)
     
     return {
