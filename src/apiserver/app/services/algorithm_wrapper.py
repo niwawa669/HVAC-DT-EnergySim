@@ -52,7 +52,7 @@ class AlgorithmWrapper:
         
         try:
             self.station_info = StationInfo()
-            self.station = Station(self.station_info)
+            self.station = Station(self.station_info)  # type: ignore
             print("✅ 冷站仿真算法初始化完成")
         except Exception as e:
             print(f"❌ 冷站初始化失败: {e}")
@@ -192,18 +192,7 @@ class AlgorithmWrapper:
                 self.station_info.ratio_Hz_min_tower = config['freq_tower_min'] / config['freq_tower_max']
             
             # ===== 重新创建 Station 实例 =====
-            self.station = Station(self.station_info)
-            
-            print("=" * 60)
-            print("📋 接收到前端配置参数:")
-            print(f"   建筑负荷: {config.get('load_building_r')} kW")
-            print(f"   大机: {config.get('Qr_chiller_BCH')} kW × {config.get('n_design_BCH')} 台")
-            print(f"   小机: {config.get('Qr_chiller_SCH')} kW × {config.get('n_design_SCH')} 台")
-            print(f"   冷冻水供水温度: {config.get('ts_chw_set')} °C")
-            print(f"   冷冻水供回水温差: {config.get('delta_t_chw')} °C")
-            print(f"   加机负荷率: {config.get('load_up')}")
-            print(f"   最小负荷率: {config.get('load_min')}")
-            print("=" * 60)
+            self.station = Station(self.station_info)  # type: ignore
             
             return True
             
