@@ -124,14 +124,9 @@
                 <div class="result-header">
                     <span>📊 仿真结果汇总</span>
                     <div class="result-actions">
-                        <el-button type="primary" size="small" @click="generateReport('standard')">
-                            生成标准报告
-                        </el-button>
-                        <el-button size="small" @click="generateReport('simplified')">
-                            生成简化报告
-                        </el-button>
-                        <el-button type="warning" size="small" @click="generateReport('expert')">
-                            生成专家报告
+                        <el-button type="primary" size="small" :loading="generating"
+                            @click="handleGenerateReport">
+                            生成报告
                         </el-button>
                     </div>
                 </div>
@@ -168,7 +163,8 @@ import {
 } from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { formatNumber } from '@/utils/format'
-import { restartSimulation } from '@/api/simulation'
+import { restartSimulation, getSimulationResults } from '@/api/simulation'
+import { generateReport } from '@/api/reports'
 
 // ===== 路由 =====
 const router = useRouter()
@@ -231,23 +227,16 @@ const metrics = ref([
 const resultMetrics = computed(() => {
     if (!resultData.value) return []
 
-    const summary = resultData.value.summary
-    const weeklyData = resultData.value.weeklyData || []
+    const summary = resultData.value.summary || {}
 
-    // ===== 计算尖峰逐时冷负荷 =====
-    let peakCoolingLoad = 0
-    if (weeklyData && weeklyData.length > 0) {
-        const peakLoads = weeklyData.map((w: any) => w.peakCoolingLoad || 0)
-        peakCoolingLoad = peakLoads.length > 0 ? Math.max(...peakLoads) : 0
-    } else {
-        peakCoolingLoad = summary.peakCoolingLoad || 0
-    }
+    // ===== 尖峰逐时冷负荷：优先取结果中的 peak_context =====
+    const peak = (resultData.value as any).peak_context
+    const peakCoolingLoad = peak?.load ?? summary.peakCoolingLoad ?? 0
 
-    // ===== 计算冷源站综合平均能效 EERa =====
-    // EERa = 冷源站总供冷量 / 冷源站总耗电量
-    const totalQStation = summary.totalQStation || summary.totalCoolingLoad || 0
+    // ===== 冷源站综合平均能效 EERa = 总供冷量 / 总耗电量 =====
+    const totalQStation = summary.totalQStation || 0
     const totalEnergy = summary.totalEnergy || 0
-    const eera = totalEnergy > 0 ? totalQStation / totalEnergy : 0
+    const eera = summary.systemEER ?? (totalEnergy > 0 ? totalQStation / totalEnergy : 0)
 
     return [
         {
@@ -407,12 +396,11 @@ const handleWebSocketMessage = (message: any) => {
         case 'completed':
             progress.value = 100
             isCompleted.value = true
-            resultData.value = {
-                summary: message.summary,
-                weeklyData: chartData.value
-            }
+            resultData.value = { summary: message.summary, weekly: [], monthly: [], meta: {} }
             addLog('✅ 仿真计算完成！', 'success')
             ElMessage.success('仿真计算完成！')
+            // 拉取七区块结果：指标与图表一律以结果契约字段为准，不用推送数据拼装
+            void loadFullResult()
 
             if (message.summary) {
                 addLog(`📈 总能耗: ${formatNumber(message.summary.totalEnergy)} kWh`, 'info')
@@ -435,6 +423,21 @@ const handleWebSocketMessage = (message: any) => {
 
         default:
             console.log('未知消息类型:', message)
+    }
+}
+
+// ===== 拉取完整结果（七区块）=====
+const loadFullResult = async () => {
+    try {
+        const res = await getSimulationResults(taskId)
+        resultData.value = res as any
+        addLog(
+            `📦 结果已加载：${res.meta.totalHours} 小时 / ${res.weekly.length} 周 / ${res.monthly.length} 月`,
+            'info'
+        )
+        nextTick(() => initRadarChart())
+    } catch (e: any) {
+        addLog('⚠️ 完整结果获取失败：' + (e?.message || '未知错误'), 'warning')
     }
 }
 
@@ -743,27 +746,28 @@ const initRadarChart = () => {
 
     radarChartInstance = echarts.init(radarChartRef.value)
 
-    const summary = resultData.value.summary
-    const weeklyData = resultData.value.weeklyData || []
+    const summary = resultData.value.summary || {}
+    const meta = (resultData.value as any).meta || {}
+    const monthly = (resultData.value as any).monthly || []
 
     // ===== 五维参数计算 =====
 
-    // 1. 冷源站综合平均能效 EERa
-    const totalQStation = summary.totalQStation || summary.totalCoolingLoad || 0
+    // 1. 冷源站综合平均能效 EERa = 总供冷量 / 总耗电量
+    const totalQStation = summary.totalQStation || 0
     const totalEnergy = summary.totalEnergy || 0
-    const eera = totalEnergy > 0 ? totalQStation / totalEnergy : 0
+    const eera = summary.systemEER ?? (totalEnergy > 0 ? totalQStation / totalEnergy : 0)
 
-    // 2. 全年平均负荷率
-    const designLoad = 500
-    let avgCoolingLoad = 0
-
-    if (weeklyData && weeklyData.length > 0) {
-        const totalLoad = weeklyData.reduce((a: number, b: any) => a + (b.coolingLoad || 0), 0)
-        const totalHours = weeklyData.length * 168
-        avgCoolingLoad = totalHours > 0 ? totalLoad / totalHours : 0
-    }
-
-    const avgLoadRate = designLoad > 0 ? Math.min((avgCoolingLoad / designLoad) * 100, 100) : 0
+    // 2. 全年平均负荷率 = 总供冷量 / (装机容量 × 计算小时数)
+    const p = meta.parameters || {}
+    const installed =
+        (Number(p.Qr_chiller_BCH) || 0) * (Number(p.n_design_BCH) || 0) +
+        (Number(p.Qr_chiller_SCH) || 0) * (Number(p.n_design_SCH) || 0)
+    const totalHours = Number(meta.totalHours) || 0
+    const avgLoadRate =
+        installed > 0 && totalHours > 0
+            ? Math.min((totalQStation / (installed * totalHours)) * 100, 100)
+            : 0
+    void monthly
 
     // 3. 单位面积供冷量 (kWh/m²)
     const area = summary.area || 2931
@@ -889,13 +893,26 @@ const updateTimer = () => {
     }
 }
 
-// ===== 报告生成 =====
-const generateReport = (type: string) => {
-    const names = { standard: '标准报告', simplified: '简化报告', expert: '专家报告' }
-    ElMessage.success(`${names[type]}生成中...`)
-    setTimeout(() => {
-        ElMessage.success(`${names[type]}生成完成！`)
-    }, 1500)
+// ===== 报告生成（单一标准模板）=====
+const generating = ref(false)
+
+const handleGenerateReport = async () => {
+    if (generating.value) return
+    generating.value = true
+    addLog('📄 开始生成报告…', 'info')
+    try {
+        const res = await generateReport(taskId)
+        addLog(`✅ 报告已生成：${res.reportId}`, 'success')
+        ElMessage.success('报告已生成')
+        router.push({ path: `/report/${res.reportId}`, query: { taskId } })
+    } catch (e: any) {
+        // 失败时只展示后端返回的原因，不提供任何下载链接
+        const detail = e?.response?.data?.detail || e?.message || '报告生成失败'
+        addLog(`❌ 报告生成失败：${detail}`, 'error')
+        ElMessage.error(String(detail))
+    } finally {
+        generating.value = false
+    }
 }
 
 // ===== 返回 =====

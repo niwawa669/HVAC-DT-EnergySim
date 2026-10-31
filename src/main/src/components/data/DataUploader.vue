@@ -848,7 +848,11 @@ const confirmData = () => {
         data: workingData.value,
         headers: parseResult.value.headers,
         outliers: outlierResult.value,
-        summary: validationResult.value?.summary
+        summary: validationResult.value?.summary,
+        // 数据溯源（4.3）：文件名与异常值修正数随数据一并上报
+        fileName: fileList.value[0]?.name || 'uploaded.csv',
+        totalRows: workingData.value.length,
+        correctedOutliers: ignoredOutliers.value.size
     })
 }
 

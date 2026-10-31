@@ -5,7 +5,13 @@ from device_model import *
 
 class Tower:
     
-    def __init__(self, model_file_path='model.pth'):
+    # 模型参考额定值：model.pth 训练时所对应的冷却塔设计点，不随选型参数变化
+    Gw_r_ref = 200.0
+    P_r_ref = 22.0
+    Ga_r_ref = 58910.0
+    ratio_Hz_min_ref = 20.0 / 50.0
+
+    def __init__(self, model_file_path='model.pth', Gw_r=None, P_r=None, Ga_r=None, ratio_Hz_min=None):
         # 输入：'水流量', '进风干球温度', '进风湿球温度', '进水温度', '风量', 输出：'出水温度', '风机功率'
         # ['ta_dry_in', 'da_in', 'tw_in', 'Gw', 'Ga']], df.loc[:, ['tw_out', 'P']]
         self.model = Model(5, 2, 128)
@@ -17,15 +23,22 @@ class Tower:
         else:
             raise FileNotFoundError("冷却塔的 model.pth 文件不存在")
         
-        self.Gw_r = 200.0
-        self.P_r = 22.0
+        # 额定值由选型参数注入；未注入时沿用参考额定值（行为与改动前完全一致）
+        self.Gw_r = float(self.Gw_r_ref if Gw_r is None else Gw_r)
+        self.P_r = float(self.P_r_ref if P_r is None else P_r)
+        # ===== 相似换算（亲和定律）=====
+        # 模型同样是在参考冷却塔（Gw_r_ref, Ga_r_ref）上训练的，输入含水、风量两个有量纲量。
+        # 气水比在同一族相似塔上不变，故风量随水量同比缩放；未显式给 Ga_r 时按此推导。
+        self.kGw = self.Gw_r / self.Gw_r_ref
+        self.Ga_r = float(self.Ga_r_ref * self.kGw if Ga_r is None else Ga_r)
+        self.kGa = self.Ga_r / self.Ga_r_ref
+        self.ratio_Hz_min = float(self.ratio_Hz_min_ref if ratio_Hz_min is None else ratio_Hz_min)
+        self.scale_applied = abs(self.Gw_r - self.Gw_r_ref) > 1e-9 or abs(self.Ga_r - self.Ga_r_ref) > 1e-9
         self.t_dry_r = 32.0
         self.da_r = 0.0225
         self.tr_cw_r = 32.0
         self.ts_cw_r = 37.0
         self.tr_cw_min = 20.0
-        self.ratio_Hz_min = 20.0 / 50.0
-        self.Ga_r = 58910.0
         self.Ga_min = self.Ga_r * self.ratio_Hz_min
         
         self.P = 0
@@ -56,8 +69,12 @@ class Tower:
             self.P = 0
             self.tr_cw = self.ts_cw
         else:
-            datas = torch.tensor([[t_dry, da, ts_cw, Gw, Ga]], dtype=torch.float32)
-            self.tr_cw, self.P = self.model(datas).squeeze().detach().numpy()
+            # 折算到参考尺度喂模型（kGw = kGa = 1 时与改动前完全一致）
+            datas = torch.tensor([[t_dry, da, ts_cw, Gw / self.kGw, self.Ga / self.kGa]], dtype=torch.float32)
+            tr_m, P_m = self.model(datas).squeeze().detach().numpy()
+            # 出水温度是强度量，直接透传；风机功率按尺度比折算回实际尺度
+            self.tr_cw = float(tr_m)
+            self.P = float(P_m) * self.kGa
         return self.tr_cw, self.P
     
     # def get_Ga_r(self, t_dry, da, tr_cw, ts_cw, Gw):

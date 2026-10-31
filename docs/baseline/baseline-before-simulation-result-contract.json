@@ -1,0 +1,580 @@
+{
+ "purpose": "simulation-result-contract 改动前的基线快照，供任务 9.2 对比使用",
+ "captured_at": "2026-10-31T13:17:41",
+ "code_state": "src/ 未做任何修改（本 change 尚未改动任何源码）",
+ "runtime": {
+  "python": "3.13.5",
+  "torch": "2.11.0+cpu",
+  "pandas": "2.3.1"
+ },
+ "input": {
+  "file": "buildingloads_adjusted.csv",
+  "rows": 8760,
+  "columns": [
+   "datetime",
+   "t_dry",
+   "d",
+   "load"
+  ],
+  "t_dry_min": -14.2,
+  "t_dry_max": 37.2,
+  "d_min": 5e-05,
+  "d_max": 0.02995,
+  "load_sum_raw": 149646120.27999997,
+  "load_max_raw": 303067.16
+ },
+ "config": {
+  "load_building_r": 196572.0,
+  "load_coe": 0.0376,
+  "coe": 0.8333,
+  "coe_tower_efficience": 0.95,
+  "Qr_chiller_BCH": 2112.6,
+  "n_design_BCH": 3,
+  "COP_chiller_BCH": 5.5,
+  "Qr_chiller_SCH": 1056.3,
+  "n_design_SCH": 1,
+  "COP_chiller_SCH": 5.0,
+  "ts_chw_design": 7.0,
+  "tr_chw_design": 12.0,
+  "tr_cw_design": 30.0,
+  "ts_cw_design": 35.0,
+  "Gr_pump_chw_BCH": 100.9,
+  "Hr_pump_chw_BCH": 32.0,
+  "n_pump_chw_BCH": 3,
+  "Gr_pump_chw_SCH": 50.5,
+  "Hr_pump_chw_SCH": 32.0,
+  "n_pump_chw_SCH": 1,
+  "Gr_pump_cw_BCH": 126.1,
+  "Hr_pump_cw_BCH": 30.0,
+  "n_pump_cw_BCH": 3,
+  "Gr_pump_cw_SCH": 64.0,
+  "Hr_pump_cw_SCH": 30.0,
+  "n_pump_cw_SCH": 1,
+  "Gr_tower_BCH": 200.0,
+  "Pr_tower_BCH": 22.0,
+  "Hs_tower_BCH": 4.0,
+  "n_tower_BCH": 3,
+  "Gr_tower_SCH": 100.0,
+  "Pr_tower_SCH": 12.0,
+  "Hs_tower_SCH": 3.8,
+  "n_tower_SCH": 1,
+  "Hr_pt": 20.0,
+  "Hr_chiller_chw_BCH": 6.0,
+  "Hr_chiller_cw_BCH": 7.0,
+  "Hr_chiller_chw_SCH": 5.0,
+  "Hr_chiller_cw_SCH": 6.0,
+  "ta_dry_r": 31.7,
+  "ta_wet_r": 23.47,
+  "ts_chw_set": 7.0,
+  "delta_t_chw": 5.0,
+  "delta_t_cw": 5.0,
+  "tr_cw_min": 20.0,
+  "approach_set": 3.0,
+  "load_up": 0.9,
+  "load_min": 0.3,
+  "Qr_list": [
+   1056.3,
+   2112.6
+  ],
+  "n_design_list": [
+   1,
+   3
+  ],
+  "freq_pump_max": 50.0,
+  "freq_pump_min": 30.0,
+  "freq_tower_max": 50.0,
+  "freq_tower_min": 25.0
+ },
+ "area": 2931.0,
+ "elapsed_seconds": 48.43,
+ "summary": {
+  "totalEnergy": 1069854.25,
+  "totalCoolingLoad": 149645504.30999997,
+  "totalQStation": 5527473.3753120005,
+  "eui": 365.0133972167969,
+  "peakCoolingLoad": 303067.16,
+  "peakHeatingLoad": 0,
+  "avgCop": 7.052810719156671,
+  "carbonEmission": 534927.125,
+  "area": 2931.0
+ },
+ "weekly": [
+  {
+   "weekNumber": 1,
+   "totalCoolingLoad": 152631.71000000002,
+   "peakCoolingLoad": 20442.28,
+   "totalQStation": 3669.504696,
+   "totalEnergyConsumption": 1203.719970703125,
+   "avgSystemCop": 5.073675674438155,
+   "avgOutdoorTemp": -1.7485714285714298
+  },
+  {
+   "weekNumber": 2,
+   "totalCoolingLoad": 4.0,
+   "peakCoolingLoad": 4.0,
+   "totalQStation": 0.0,
+   "totalEnergyConsumption": 0.0,
+   "avgSystemCop": 0,
+   "avgOutdoorTemp": -2.9397619047619052
+  },
+  {
+   "weekNumber": 3,
+   "totalCoolingLoad": 157876.62,
+   "peakCoolingLoad": 16381.53,
+   "totalQStation": 3842.321064,
+   "totalEnergyConsumption": 1427.444580078125,
+   "avgSystemCop": 4.828407827602192,
+   "avgOutdoorTemp": -7.3622023809523816
+  },
+  {
+   "weekNumber": 4,
+   "totalCoolingLoad": 349600.01,
+   "peakCoolingLoad": 24559.05,
+   "totalQStation": 11837.348183999999,
+   "totalEnergyConsumption": 3812.9765625,
+   "avgSystemCop": 5.019061804661811,
+   "avgOutdoorTemp": -4.1171428571428565
+  },
+  {
+   "weekNumber": 5,
+   "totalCoolingLoad": 175029.72000000003,
+   "peakCoolingLoad": 28115.83,
+   "totalQStation": 5502.6024560000005,
+   "totalEnergyConsumption": 1455.623046875,
+   "avgSystemCop": 6.150567772550592,
+   "avgOutdoorTemp": -3.8109523809523798
+  },
+  {
+   "weekNumber": 6,
+   "totalCoolingLoad": 252524.00000000006,
+   "peakCoolingLoad": 24990.02,
+   "totalQStation": 7860.7530080000015,
+   "totalEnergyConsumption": 2821.051025390625,
+   "avgSystemCop": 4.806378660211945,
+   "avgOutdoorTemp": -2.3717857142857133
+  },
+  {
+   "weekNumber": 7,
+   "totalCoolingLoad": 200805.25,
+   "peakCoolingLoad": 19894.57,
+   "totalQStation": 6055.270192000001,
+   "totalEnergyConsumption": 2091.61181640625,
+   "avgSystemCop": 4.936650823169862,
+   "avgOutdoorTemp": -2.024821428571428
+  },
+  {
+   "weekNumber": 8,
+   "totalCoolingLoad": 220395.40999999997,
+   "peakCoolingLoad": 20564.46,
+   "totalQStation": 6843.4929040000015,
+   "totalEnergyConsumption": 2325.436767578125,
+   "avgSystemCop": 4.978608603064185,
+   "avgOutdoorTemp": 0.37422619047619043
+  },
+  {
+   "weekNumber": 9,
+   "totalCoolingLoad": 737257.3800000001,
+   "peakCoolingLoad": 43960.41,
+   "totalQStation": 27322.357720000004,
+   "totalEnergyConsumption": 6291.57421875,
+   "avgSystemCop": 6.688528303969775,
+   "avgOutdoorTemp": 3.25125
+  },
+  {
+   "weekNumber": 10,
+   "totalCoolingLoad": 824266.2999999998,
+   "peakCoolingLoad": 69788.32,
+   "totalQStation": 29638.688800000004,
+   "totalEnergyConsumption": 5405.45361328125,
+   "avgSystemCop": 7.8593373936028685,
+   "avgOutdoorTemp": 8.74934523809524
+  },
+  {
+   "weekNumber": 11,
+   "totalCoolingLoad": 312167.17,
+   "peakCoolingLoad": 31851.32,
+   "totalQStation": 10364.538136000003,
+   "totalEnergyConsumption": 2520.97607421875,
+   "avgSystemCop": 6.507284894607773,
+   "avgOutdoorTemp": 5.94434523809524
+  },
+  {
+   "weekNumber": 12,
+   "totalCoolingLoad": 660631.46,
+   "peakCoolingLoad": 39400.61,
+   "totalQStation": 23204.650496000002,
+   "totalEnergyConsumption": 4663.81494140625,
+   "avgSystemCop": 7.598238186887535,
+   "avgOutdoorTemp": 8.278154761904759
+  },
+  {
+   "weekNumber": 13,
+   "totalCoolingLoad": 720878.8500000001,
+   "peakCoolingLoad": 49559.36,
+   "totalQStation": 25950.008479999997,
+   "totalEnergyConsumption": 4697.54248046875,
+   "avgSystemCop": 8.003488421012099,
+   "avgOutdoorTemp": 9.65553571428571
+  },
+  {
+   "weekNumber": 14,
+   "totalCoolingLoad": 787628.3300000003,
+   "peakCoolingLoad": 53352.93,
+   "totalQStation": 27817.477152,
+   "totalEnergyConsumption": 5823.89404296875,
+   "avgSystemCop": 7.454361017613768,
+   "avgOutdoorTemp": 11.160357142857142
+  },
+  {
+   "weekNumber": 15,
+   "totalCoolingLoad": 1771211.8599999994,
+   "peakCoolingLoad": 82329.89,
+   "totalQStation": 64652.245336,
+   "totalEnergyConsumption": 11982.7880859375,
+   "avgSystemCop": 8.128707987788378,
+   "avgOutdoorTemp": 15.187083333333337
+  },
+  {
+   "weekNumber": 16,
+   "totalCoolingLoad": 1008453.0799999998,
+   "peakCoolingLoad": 50640.98,
+   "totalQStation": 35799.03896000001,
+   "totalEnergyConsumption": 7517.0400390625,
+   "avgSystemCop": 7.632755156908165,
+   "avgOutdoorTemp": 13.989226190476193
+  },
+  {
+   "weekNumber": 17,
+   "totalCoolingLoad": 1843791.0999999999,
+   "peakCoolingLoad": 99478.34,
+   "totalQStation": 67070.512272,
+   "totalEnergyConsumption": 13704.0625,
+   "avgSystemCop": 7.215574126556157,
+   "avgOutdoorTemp": 17.670059523809524
+  },
+  {
+   "weekNumber": 18,
+   "totalCoolingLoad": 2395395.32,
+   "peakCoolingLoad": 109059.51,
+   "totalQStation": 88243.540392,
+   "totalEnergyConsumption": 15912.724609375,
+   "avgSystemCop": 7.873740623823562,
+   "avgOutdoorTemp": 18.08357142857143
+  },
+  {
+   "weekNumber": 19,
+   "totalCoolingLoad": 2806939.4299999992,
+   "peakCoolingLoad": 95163.19,
+   "totalQStation": 103744.992784,
+   "totalEnergyConsumption": 19159.494140625,
+   "avgSystemCop": 7.880177584571656,
+   "avgOutdoorTemp": 19.39910714285713
+  },
+  {
+   "weekNumber": 20,
+   "totalCoolingLoad": 1302850.1600000001,
+   "peakCoolingLoad": 74916.58,
+   "totalQStation": 46104.921471999995,
+   "totalEnergyConsumption": 8492.80859375,
+   "avgSystemCop": 8.195229802448702,
+   "avgOutdoorTemp": 18.497023809523814
+  },
+  {
+   "weekNumber": 21,
+   "totalCoolingLoad": 3097624.680000001,
+   "peakCoolingLoad": 93465.83,
+   "totalQStation": 113705.62044000001,
+   "totalEnergyConsumption": 20319.359375,
+   "avgSystemCop": 8.112992485879431,
+   "avgOutdoorTemp": 20.28982142857142
+  },
+  {
+   "weekNumber": 22,
+   "totalCoolingLoad": 1954967.6699999997,
+   "peakCoolingLoad": 97096.55,
+   "totalQStation": 71649.44816799999,
+   "totalEnergyConsumption": 14144.8505859375,
+   "avgSystemCop": 7.323481360540858,
+   "avgOutdoorTemp": 19.451547619047613
+  },
+  {
+   "weekNumber": 23,
+   "totalCoolingLoad": 2407758.0,
+   "peakCoolingLoad": 92421.2,
+   "totalQStation": 86752.935768,
+   "totalEnergyConsumption": 16452.869140625,
+   "avgSystemCop": 7.3602709692120944,
+   "avgOutdoorTemp": 20.875000000000004
+  },
+  {
+   "weekNumber": 24,
+   "totalCoolingLoad": 8241517.800000002,
+   "peakCoolingLoad": 132606.98,
+   "totalQStation": 307274.824528,
+   "totalEnergyConsumption": 54390.94921875,
+   "avgSystemCop": 7.825053551108862,
+   "avgOutdoorTemp": 26.87619047619048
+  },
+  {
+   "weekNumber": 25,
+   "totalCoolingLoad": 8439596.44,
+   "peakCoolingLoad": 139657.73,
+   "totalQStation": 314336.03045599983,
+   "totalEnergyConsumption": 57925.48828125,
+   "avgSystemCop": 7.051714823592077,
+   "avgOutdoorTemp": 26.907619047619068
+  },
+  {
+   "weekNumber": 26,
+   "totalCoolingLoad": 7092421.829999997,
+   "peakCoolingLoad": 135495.76,
+   "totalQStation": 261736.37036799995,
+   "totalEnergyConsumption": 50514.421875,
+   "avgSystemCop": 6.981031581962422,
+   "avgOutdoorTemp": 26.140714285714292
+  },
+  {
+   "weekNumber": 27,
+   "totalCoolingLoad": 9590900.15,
+   "peakCoolingLoad": 141598.74,
+   "totalQStation": 357868.1959919999,
+   "totalEnergyConsumption": 72458.234375,
+   "avgSystemCop": 6.335381250289778,
+   "avgOutdoorTemp": 27.30892857142858
+  },
+  {
+   "weekNumber": 28,
+   "totalCoolingLoad": 6976126.450000001,
+   "peakCoolingLoad": 158629.08,
+   "totalQStation": 259193.86438400001,
+   "totalEnergyConsumption": 54507.13671875,
+   "avgSystemCop": 6.01141565147389,
+   "avgOutdoorTemp": 26.197797619047613
+  },
+  {
+   "weekNumber": 29,
+   "totalCoolingLoad": 9030002.749999998,
+   "peakCoolingLoad": 135056.24,
+   "totalQStation": 337123.7180080001,
+   "totalEnergyConsumption": 67200.875,
+   "avgSystemCop": 6.460696440759265,
+   "avgOutdoorTemp": 26.487857142857155
+  },
+  {
+   "weekNumber": 30,
+   "totalCoolingLoad": 8034106.960000001,
+   "peakCoolingLoad": 153520.02,
+   "totalQStation": 298744.70579200005,
+   "totalEnergyConsumption": 63805.421875,
+   "avgSystemCop": 5.935701956703668,
+   "avgOutdoorTemp": 25.963273809523805
+  },
+  {
+   "weekNumber": 31,
+   "totalCoolingLoad": 17512306.97,
+   "peakCoolingLoad": 303067.16,
+   "totalQStation": 657148.8386480001,
+   "totalEnergyConsumption": 133340.03125,
+   "avgSystemCop": 6.151301169994431,
+   "avgOutdoorTemp": 28.53130952380953
+  },
+  {
+   "weekNumber": 32,
+   "totalCoolingLoad": 6399029.31,
+   "peakCoolingLoad": 126250.77,
+   "totalQStation": 237056.1936,
+   "totalEnergyConsumption": 42303.78125,
+   "avgSystemCop": 7.535927753944553,
+   "avgOutdoorTemp": 24.161964285714287
+  },
+  {
+   "weekNumber": 33,
+   "totalCoolingLoad": 6736834.000000004,
+   "peakCoolingLoad": 155244.12,
+   "totalQStation": 249393.06906399998,
+   "totalEnergyConsumption": 48316.4921875,
+   "avgSystemCop": 6.51083792751972,
+   "avgOutdoorTemp": 25.36988095238096
+  },
+  {
+   "weekNumber": 34,
+   "totalCoolingLoad": 6090254.6499999985,
+   "peakCoolingLoad": 167590.61,
+   "totalQStation": 225881.53827199995,
+   "totalEnergyConsumption": 44134.875,
+   "avgSystemCop": 6.507176129669542,
+   "avgOutdoorTemp": 24.808333333333334
+  },
+  {
+   "weekNumber": 35,
+   "totalCoolingLoad": 7717599.43,
+   "peakCoolingLoad": 184403.12,
+   "totalQStation": 287427.56413600006,
+   "totalEnergyConsumption": 57044.29296875,
+   "avgSystemCop": 6.463811386398686,
+   "avgOutdoorTemp": 26.115119047619043
+  },
+  {
+   "weekNumber": 36,
+   "totalCoolingLoad": 3770373.7700000005,
+   "peakCoolingLoad": 176945.33,
+   "totalQStation": 140084.204248,
+   "totalEnergyConsumption": 23678.1171875,
+   "avgSystemCop": 8.1606039745996,
+   "avgOutdoorTemp": 21.117738095238103
+  },
+  {
+   "weekNumber": 37,
+   "totalCoolingLoad": 2265513.7399999998,
+   "peakCoolingLoad": 115644.44,
+   "totalQStation": 83299.77507999998,
+   "totalEnergyConsumption": 14930.0771484375,
+   "avgSystemCop": 8.047898091814302,
+   "avgOutdoorTemp": 19.583809523809517
+  },
+  {
+   "weekNumber": 38,
+   "totalCoolingLoad": 3470936.159999999,
+   "peakCoolingLoad": 147886.64,
+   "totalQStation": 127683.79004800001,
+   "totalEnergyConsumption": 21437.921875,
+   "avgSystemCop": 8.302266035977889,
+   "avgOutdoorTemp": 19.7710119047619
+  },
+  {
+   "weekNumber": 39,
+   "totalCoolingLoad": 2555267.49,
+   "peakCoolingLoad": 114786.1,
+   "totalQStation": 94082.343624,
+   "totalEnergyConsumption": 17509.3125,
+   "avgSystemCop": 7.5066124484162335,
+   "avgOutdoorTemp": 19.248273809523816
+  },
+  {
+   "weekNumber": 40,
+   "totalCoolingLoad": 1988162.8099999996,
+   "peakCoolingLoad": 106903.86,
+   "totalQStation": 73611.46617600002,
+   "totalEnergyConsumption": 12719.306640625,
+   "avgSystemCop": 7.8674227655791,
+   "avgOutdoorTemp": 14.33196428571428
+  },
+  {
+   "weekNumber": 41,
+   "totalCoolingLoad": 938013.1299999999,
+   "peakCoolingLoad": 98277.19,
+   "totalQStation": 33884.780848,
+   "totalEnergyConsumption": 6488.78759765625,
+   "avgSystemCop": 7.3828739547997415,
+   "avgOutdoorTemp": 15.404404761904768
+  },
+  {
+   "weekNumber": 42,
+   "totalCoolingLoad": 2675724.25,
+   "peakCoolingLoad": 131624.61,
+   "totalQStation": 99026.250312,
+   "totalEnergyConsumption": 16773.048828125,
+   "avgSystemCop": 8.089295556696689,
+   "avgOutdoorTemp": 12.302440476190478
+  },
+  {
+   "weekNumber": 43,
+   "totalCoolingLoad": 895803.3200000001,
+   "peakCoolingLoad": 102888.53,
+   "totalQStation": 32455.516487999994,
+   "totalEnergyConsumption": 6293.46875,
+   "avgSystemCop": 7.22359144019603,
+   "avgOutdoorTemp": 11.994285714285716
+  },
+  {
+   "weekNumber": 44,
+   "totalCoolingLoad": 1061113.4699999997,
+   "peakCoolingLoad": 84662.62,
+   "totalQStation": 38914.38320000001,
+   "totalEnergyConsumption": 6399.99169921875,
+   "avgSystemCop": 8.219897731056323,
+   "avgOutdoorTemp": 6.562559523809524
+  },
+  {
+   "weekNumber": 45,
+   "totalCoolingLoad": 942996.41,
+   "peakCoolingLoad": 71892.14,
+   "totalQStation": 34634.57184799999,
+   "totalEnergyConsumption": 5769.3603515625,
+   "avgSystemCop": 8.274090378741365,
+   "avgOutdoorTemp": 6.336130952380951
+  },
+  {
+   "weekNumber": 46,
+   "totalCoolingLoad": 757794.24,
+   "peakCoolingLoad": 86118.32,
+   "totalQStation": 27133.956904,
+   "totalEnergyConsumption": 4666.5361328125,
+   "avgSystemCop": 8.136384694518597,
+   "avgOutdoorTemp": 5.394166666666668
+  },
+  {
+   "weekNumber": 47,
+   "totalCoolingLoad": 1128490.48,
+   "peakCoolingLoad": 102418.37,
+   "totalQStation": 41971.23650399999,
+   "totalEnergyConsumption": 7401.6171875,
+   "avgSystemCop": 8.098594975312304,
+   "avgOutdoorTemp": 7.030833333333334
+  },
+  {
+   "weekNumber": 48,
+   "totalCoolingLoad": 308791.81000000006,
+   "peakCoolingLoad": 51170.37,
+   "totalQStation": 10794.4712,
+   "totalEnergyConsumption": 2084.6884765625,
+   "avgSystemCop": 7.580086753616587,
+   "avgOutdoorTemp": 1.5588095238095245
+  },
+  {
+   "weekNumber": 49,
+   "totalCoolingLoad": 328336.48,
+   "peakCoolingLoad": 52999.79,
+   "totalQStation": 11063.806768000002,
+   "totalEnergyConsumption": 2037.1751708984375,
+   "avgSystemCop": 7.936879153134117,
+   "avgOutdoorTemp": 2.095714285714285
+  },
+  {
+   "weekNumber": 50,
+   "totalCoolingLoad": 312275.47000000003,
+   "peakCoolingLoad": 52161.31,
+   "totalQStation": 11561.102864,
+   "totalEnergyConsumption": 1828.41650390625,
+   "avgSystemCop": 8.732128215569446,
+   "avgOutdoorTemp": -0.04154761904761896
+  },
+  {
+   "weekNumber": 51,
+   "totalCoolingLoad": 203919.3,
+   "peakCoolingLoad": 39120.17,
+   "totalQStation": 6095.453312,
+   "totalEnergyConsumption": 1508.0875244140625,
+   "avgSystemCop": 6.274462289921248,
+   "avgOutdoorTemp": -3.7881547619047584
+  },
+  {
+   "weekNumber": 52,
+   "totalCoolingLoad": 40607.73,
+   "peakCoolingLoad": 9550.1,
+   "totalQStation": 359.08376000000004,
+   "totalEnergyConsumption": 159.17263793945312,
+   "avgSystemCop": 4.462689112502261,
+   "avgOutdoorTemp": -0.2417857142857144
+  }
+ ],
+ "week_count": 52,
+ "weekly_hours_sum": 8736,
+ "observed_anomalies": {
+  "hours_covered": 8736,
+  "input_rows": 8760,
+  "hours_lost": 24,
+  "totalCoolingLoad_raw_units_sum": 149646120.27999997,
+  "note": "totalCoolingLoad 为原始列数值求和，totalQStation 为 load*load_coe 后换算，两者量纲不一致"
+ }
+}

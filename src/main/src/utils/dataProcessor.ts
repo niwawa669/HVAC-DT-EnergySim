@@ -424,7 +424,7 @@ export function fillMissingValues(
 
   headers.forEach((header) => {
     const missingIndices: number[] = []
-    result.forEach((row, index) => {
+    result.forEach((row: Record<string, any>, index: number) => {
       const value = row[header]
       if (value === '' || value === null || value === undefined || isNaN(value)) {
         missingIndices.push(index)
@@ -434,7 +434,7 @@ export function fillMissingValues(
     if (missingIndices.length === 0) return
 
     const validValues: { index: number; value: number }[] = []
-    result.forEach((row, index) => {
+    result.forEach((row: Record<string, any>, index: number) => {
       if (!missingIndices.includes(index)) {
         const val = parseFloat(row[header])
         if (!isNaN(val)) {

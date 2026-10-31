@@ -82,26 +82,9 @@
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
-                                    <el-form-item label="建筑负荷修正系数">
-                                        <el-input-number v-model="equipmentForm.load_coe" :min="0" :max="1"
-                                            :step="0.001" :precision="4" controls-position="right"
-                                            style="width: 100%;" />
-                                    </el-form-item>
-                                </el-col>
-                            </el-row>
-
-                            <el-row :gutter="20">
-                                <el-col :span="12">
-                                    <el-form-item label="系统能效修正系数">
-                                        <el-input-number v-model="equipmentForm.coe" :min="0" :max="1" :step="0.01"
+                                    <el-form-item label="量纲换算系数 (W→kW)">
+                                        <el-input-number v-model="equipmentForm.load_coe" :min="0" :step="0.001"
                                             :precision="4" controls-position="right" style="width: 100%;" />
-                                    </el-form-item>
-                                </el-col>
-                                <el-col :span="12">
-                                    <el-form-item label="冷却塔风机效率缩放系数">
-                                        <el-input-number v-model="equipmentForm.coe_tower_efficience" :min="0" :max="1"
-                                            :step="0.01" :precision="2" controls-position="right"
-                                            style="width: 100%;" />
                                     </el-form-item>
                                 </el-col>
                             </el-row>
@@ -126,7 +109,7 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="大机COP">
+                                    <el-form-item label="大机COP（仅展示，不参与计算）">
                                         <el-input-number v-model="equipmentForm.COP_chiller_BCH" :min="0" :max="10"
                                             :step="0.1" :precision="2" controls-position="right" style="width: 100%;" />
                                     </el-form-item>
@@ -153,7 +136,7 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="小机COP">
+                                    <el-form-item label="小机COP（仅展示，不参与计算）">
                                         <el-input-number v-model="equipmentForm.COP_chiller_SCH" :min="0" :max="10"
                                             :step="0.1" :precision="2" controls-position="right" style="width: 100%;" />
                                     </el-form-item>
@@ -318,7 +301,7 @@
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
-                                    <el-form-item label="大机冷却塔设计功率 (kW)">
+                                    <el-form-item label="大机冷却塔设计功率 (kW)（仅展示）">
                                         <el-input-number v-model="equipmentForm.Pr_tower_BCH" :min="0" :step="1"
                                             controls-position="right" style="width: 100%;" />
                                     </el-form-item>
@@ -348,7 +331,7 @@
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
-                                    <el-form-item label="小机冷却塔设计功率 (kW)">
+                                    <el-form-item label="小机冷却塔设计功率 (kW)（仅展示）">
                                         <el-input-number v-model="equipmentForm.Pr_tower_SCH" :min="0" :step="1"
                                             controls-position="right" style="width: 100%;" />
                                     </el-form-item>
@@ -506,7 +489,7 @@
                             <el-row :gutter="20">
                                 <el-col :span="12">
                                     <el-form-item label="冷机加机优先级设置 (Qr_list)">
-                                        <el-input v-model="controlForm.Qr_list_str" placeholder="例如: 1056.3, 2112.6"
+                                        <el-input v-model="controlForm.Qr_list_str" placeholder="例如: 39.7404, 79.4808"
                                             style="width: 100%;" />
                                         <div style="font-size: 12px; color: #909399; margin-top: 4px;">
                                             按优先级顺序填写冷机额定冷量，用逗号分隔
@@ -715,45 +698,43 @@ const projectForm = reactive({
 const equipmentForm = reactive({
     // 建筑负荷
     load_building_r: 196572.0,
-    load_coe: 0.0376,
-    coe: 0.8333,
-    coe_tower_efficience: 0.95,
+    load_coe: 0.001,          // 量纲换算 W -> kW（口径 v1）
 
-    // 冷机参数
-    Qr_chiller_BCH: 2112.6,
+    // 冷机参数（默认值 ÷26.58 重标定，见 docs/data-contract.md）
+    Qr_chiller_BCH: 79.4808,
     n_design_BCH: 3,
-    COP_chiller_BCH: 5.5,
-    Qr_chiller_SCH: 1056.3,
+    COP_chiller_BCH: 5.5,     // 仅展示：标称值 vs 模型值校核
+    Qr_chiller_SCH: 39.7404,
     n_design_SCH: 1,
-    COP_chiller_SCH: 5.0,
+    COP_chiller_SCH: 5.0,     // 仅展示
     ts_chw_design: 7.0,
     tr_chw_design: 12.0,
     tr_cw_design: 30.0,
     ts_cw_design: 35.0,
 
     // 冷冻泵参数
-    Gr_pump_chw_BCH: 100.9,
+    Gr_pump_chw_BCH: 3.7961,
     Hr_pump_chw_BCH: 32.0,
     n_pump_chw_BCH: 3,
-    Gr_pump_chw_SCH: 50.5,
+    Gr_pump_chw_SCH: 1.9007,
     Hr_pump_chw_SCH: 32.0,
     n_pump_chw_SCH: 1,
 
     // 冷却泵参数
-    Gr_pump_cw_BCH: 126.1,
+    Gr_pump_cw_BCH: 4.7442,
     Hr_pump_cw_BCH: 30.0,
     n_pump_cw_BCH: 3,
-    Gr_pump_cw_SCH: 64.0,
+    Gr_pump_cw_SCH: 2.4078,
     Hr_pump_cw_SCH: 30.0,
     n_pump_cw_SCH: 1,
 
     // 冷却塔参数
-    Gr_tower_BCH: 200.0,
-    Pr_tower_BCH: 22.0,
+    Gr_tower_BCH: 7.5245,
+    Pr_tower_BCH: 0.8277,     // 仅展示
     Hs_tower_BCH: 4.0,
     n_tower_BCH: 3,
-    Gr_tower_SCH: 100.0,
-    Pr_tower_SCH: 12.0,
+    Gr_tower_SCH: 3.7622,
+    Pr_tower_SCH: 0.4515,     // 仅展示
     Hs_tower_SCH: 3.8,
     n_tower_SCH: 1,
 
@@ -781,7 +762,7 @@ const controlForm = reactive({
     load_min: 0.3,
 
     // 冷机加机优先级
-    Qr_list_str: '1056.3, 2112.6',
+    Qr_list_str: '39.7404, 79.4808',
     n_design_list_str: '1, 3',
 
     // 频率控制
@@ -943,6 +924,26 @@ const startSimulation = async () => {
         return
     }
 
+    // ===== 台数一致性校验（equipment-config：泵/塔可用台数不得少于同时投运的冷机台数）=====
+    const consistencyErrors: string[] = []
+    const pairs: Array<[string, number, number]> = [
+        ['大机冷冻泵台数', equipmentForm.n_pump_chw_BCH, equipmentForm.n_design_BCH],
+        ['小机冷冻泵台数', equipmentForm.n_pump_chw_SCH, equipmentForm.n_design_SCH],
+        ['大机冷却泵台数', equipmentForm.n_pump_cw_BCH, equipmentForm.n_design_BCH],
+        ['小机冷却泵台数', equipmentForm.n_pump_cw_SCH, equipmentForm.n_design_SCH],
+        ['大机冷却塔台数', equipmentForm.n_tower_BCH, equipmentForm.n_design_BCH],
+        ['小机冷却塔台数', equipmentForm.n_tower_SCH, equipmentForm.n_design_SCH],
+    ]
+    for (const [label, deviceCount, chillerCount] of pairs) {
+        if (Number(deviceCount) < Number(chillerCount)) {
+            consistencyErrors.push(`${label}(${deviceCount}) 少于对应冷机台数(${chillerCount})`)
+        }
+    }
+    if (consistencyErrors.length > 0) {
+        ElMessage.error('台数配置不一致：' + consistencyErrors.join('；'))
+        return
+    }
+
     simulating.value = true
 
     try {
@@ -962,8 +963,6 @@ const startSimulation = async () => {
             // 设备选型参数
             load_building_r: equipmentForm.load_building_r,
             load_coe: equipmentForm.load_coe,
-            coe: equipmentForm.coe,
-            coe_tower_efficience: equipmentForm.coe_tower_efficience,
 
             // 冷机参数
             Qr_chiller_BCH: equipmentForm.Qr_chiller_BCH,
@@ -1022,6 +1021,10 @@ const startSimulation = async () => {
             load_min: controlForm.load_min,
             Qr_list: Qr_list,
             n_design_list: n_design_list,
+            // 模型适用范围（D11）：本期由用户配置，报告须声明其非真实训练域
+            applicable_range: {
+                t_dry_min: -20, t_dry_max: 40, d_min: 0, d_max: 0.03
+            },
             freq_pump_max: controlForm.freq_pump_max,
             freq_pump_min: controlForm.freq_pump_min,
             freq_tower_max: controlForm.freq_tower_max,
@@ -1037,6 +1040,13 @@ const startSimulation = async () => {
             data: {
                 headers: parsedData.value.headers,
                 rows: parsedData.value.data
+            },
+            // 数据溯源（4.3）：随请求上报，写入结果 meta
+            dataMeta: {
+                fileName: parsedData.value.fileName || 'uploaded.csv',
+                totalRows: parsedData.value.data.length,
+                confirmedRange: `${parsedData.value.data[0]?.[parsedData.value.headers[0]] || ''} ~ ${parsedData.value.data[parsedData.value.data.length - 1]?.[parsedData.value.headers[0]] || ''}`,
+                correctedOutliers: parsedData.value.correctedOutliers || 0
             }
         }
 

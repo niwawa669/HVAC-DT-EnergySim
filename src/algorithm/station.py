@@ -8,16 +8,15 @@ from buildingload import CsvToDataframe
 @dataclass
 class StationInfo:
     # 建筑暖通设计参数：load = 196572kW / 26.6, t_dry_W = 31.7, da_w = 0.02347
-    load_building_r: float = 196572.0 # 建筑负荷 kW
-    load_coe: float = 1.0 / 26.58 # 建筑负荷修正系数
-    coe: float = 1.0 / 1.2 # 系统能效修正系数
-    coe_tower_efficience: float = 0.95 # 冷却塔风机效率缩放系数
+    load_building_r: float = 196572.0 # 建筑设计峰值负荷（数据原始单位，见 docs/data-contract.md）
+    # 量纲换算系数（D8，口径 v1）：数据列单位为 W，计算单位为 kW
+    load_coe: float = 0.001
     
-    Qr_chiller_BCH: float = 2112.6 # 大机额定冷量 kW
+    Qr_chiller_BCH: float = 79.4808 # 大机额定冷量 kW（原 2112.6 ÷ 26.58 重标定，D8/6.6）
     n_design_BCH: int = 3 # 大机设计台数
     tr_cw_design_BCH: float = 30.0 # 大机冷却水回水温度设计值
     ts_cw_design_BCH: float = 35.0 # 大机冷却水出水温度设计值
-    Qr_chiller_SCH: float = 1056.3 # 小机额定冷量 kW
+    Qr_chiller_SCH: float = 39.7404 # 小机额定冷量 kW（原 1056.3 ÷ 26.58 重标定，D8/6.6）
     n_design_SCH: int = 1 # 小机设计台数
     tr_cw_design_SCH: float = 30.0 # 小机冷却水回水温度设计值
     ts_cw_design_SCH: float = 35.0 # 小机冷却水出水温度设计值
@@ -26,7 +25,7 @@ class StationInfo:
     ta_wet_r: float = 23.47 # 室外湿球温度设计值
     load_up: float = 0.9 # 加机负荷率设置值
     load_min: float = 0.3 # 冷机最小负荷率设置值
-    Qr_list: list = field(default_factory=lambda: [1056.3, 2112.6]) # 冷机加机优先级设置
+    Qr_list: list = field(default_factory=lambda: [39.7404, 79.4808]) # 冷机加机优先级设置（随装机重标定）
     n_design_list: list = field(default_factory=lambda: [1, 3]) # 对应Qr_list的冷机设计台数
     delta_t_chw: float = 5.0 # 冷冻水供回水温差设置值
     delta_t_cw: float = 5.0 # 冷却水供回水温差设置值
@@ -41,20 +40,26 @@ class StationInfo:
     Hs_tower_BCH: float = 4.0 # 大机冷却塔设计压降 mH2O
     Hs_tower_SCH: float = 3.8 # 小机冷却塔设计压降 mH2O
 
-    Gr_pump_chw_BCH: float = 100.9 # 大机冷冻泵设计流量 L/s 92.0/32.0
-    Hr_pump_chw_BCH: float = 32.0 # 大机冷冻泵设计杨程  mH2O
-    Gr_pump_chw_SCH: float = 50.5 # 小机冷冻泵设计流量 L/s
+    Gr_pump_chw_BCH: float = 3.7961 # 大机冷冻泵设计流量 L/s（÷26.58 重标定）
+    Hr_pump_chw_BCH: float = 32.0 # 大机冷冻泵设计杨程  mH2O（水力阻力参数，不随容量缩放）
+    n_pump_chw_BCH: int = 3 # 大机冷冻泵台数
+    Gr_pump_chw_SCH: float = 1.9007 # 小机冷冻泵设计流量 L/s（÷26.58 重标定）
     Hr_pump_chw_SCH: float = 32.0 # 小机冷冻泵设计杨程  mH2O
+    n_pump_chw_SCH: int = 1 # 小机冷冻泵台数
     
-    Gr_pump_cw_BCH: float = 126.1 # 大机冷却泵设计流量 L/s 155.0/25.5
+    Gr_pump_cw_BCH: float = 4.7442 # 大机冷却泵设计流量 L/s（÷26.58 重标定）
     Hr_pump_cw_BCH: float = 30.0 # 大机冷却泵设计杨程  mH2O
-    Gr_pump_cw_SCH: float = 64.0 # 小机冷却泵设计流量 L/s
+    n_pump_cw_BCH: int = 3 # 大机冷却泵台数
+    Gr_pump_cw_SCH: float = 2.4078 # 小机冷却泵设计流量 L/s（÷26.58 重标定）
     Hr_pump_cw_SCH: float = 30.0 # 小机冷却泵设计杨程  mH2O
+    n_pump_cw_SCH: int = 1 # 小机冷却泵台数
     
-    Gr_tower_BCH: float = 200.0 # 大机冷却塔设计流量 L/s 200.0L/s / 32.0℃/23.65℃ / 36.0℃/30.44℃ / 58910m^3/h / 22kW
-    Pr_tower_BCH: float = 22.0 # 大机冷却塔设计功率 kW
-    Gr_tower_SCH: float = 100.0 # 小机冷却塔设计流量 L/s
-    Pr_tower_SCH: float = 12.0 # 小机冷却塔设计功率 kW
+    Gr_tower_BCH: float = 7.5245 # 大机冷却塔设计流量 L/s（÷26.58 重标定）
+    Pr_tower_BCH: float = 0.8277 # 大机冷却塔设计功率 kW（÷26.58，仅展示与标称校核）
+    n_tower_BCH: int = 3 # 大机冷却塔台数
+    Gr_tower_SCH: float = 3.7622 # 小机冷却塔设计流量 L/s（÷26.58 重标定）
+    Pr_tower_SCH: float = 0.4515 # 小机冷却塔设计功率 kW（÷26.58，仅展示）
+    n_tower_SCH: int = 1 # 小机冷却塔台数
     
     ratio_Hz_min_pump = 30.0 / 50.0 # 冷却塔风机最小频率/最大频率
     ratio_Hz_min_tower = 20.0 / 50.0 # 冷却塔风机最小频率/最大频率
@@ -65,12 +70,13 @@ class Station:
     def __init__(self, station_info: StationInfo):
         self.station_info = station_info
         
-        self.ratio_load_r_SCH = self.station_info.Qr_chiller_SCH / (self.station_info.Qr_chiller_BCH * 3 + self.station_info.Qr_chiller_SCH)
+        _q_bch_total = self.station_info.Qr_chiller_BCH * self.station_info.n_design_BCH
+        self.ratio_load_r_SCH = self.station_info.Qr_chiller_SCH / (_q_bch_total + self.station_info.Qr_chiller_SCH)
         self.load_building_r_SCH = self.station_info.load_building_r * self.ratio_load_r_SCH
         self.load_building_r_BCH = self.station_info.load_building_r * (1.0 - self.ratio_load_r_SCH)
         self.channel_info_SCH = ChannelInfo(
             load_building_r=self.load_building_r_SCH,
-            load_coe=1.0,
+            load_coe=self.station_info.load_coe,
             Qr_chiller=self.station_info.Qr_chiller_SCH,
             n_design=self.station_info.n_design_SCH,
             tr_cw_design=self.station_info.tr_cw_design_SCH,
@@ -94,12 +100,15 @@ class Station:
             Hr_pump_cw=self.station_info.Hr_pump_cw_SCH,
             Gr_tower=self.station_info.Gr_tower_SCH,
             Pr_tower=self.station_info.Pr_tower_SCH,
+            n_pump_chw=self.station_info.n_pump_chw_SCH,
+            n_pump_cw=self.station_info.n_pump_cw_SCH,
+            n_tower=self.station_info.n_tower_SCH,
             ratio_Hz_min_pump=self.station_info.ratio_Hz_min_pump,
             ratio_Hz_min_tower=self.station_info.ratio_Hz_min_tower,
         )
         self.channel_info_BCH = ChannelInfo(
             load_building_r=self.load_building_r_BCH,
-            load_coe=1.0,
+            load_coe=self.station_info.load_coe,
             Qr_chiller=self.station_info.Qr_chiller_BCH,
             n_design=self.station_info.n_design_BCH,
             tr_cw_design=self.station_info.tr_cw_design_BCH,
@@ -123,6 +132,9 @@ class Station:
             Hr_pump_cw=self.station_info.Hr_pump_cw_BCH,
             Gr_tower=self.station_info.Gr_tower_BCH,
             Pr_tower=self.station_info.Pr_tower_BCH,
+            n_pump_chw=self.station_info.n_pump_chw_BCH,
+            n_pump_cw=self.station_info.n_pump_cw_BCH,
+            n_tower=self.station_info.n_tower_BCH,
             ratio_Hz_min_pump=self.station_info.ratio_Hz_min_pump,
             ratio_Hz_min_tower=self.station_info.ratio_Hz_min_tower,
         )
@@ -134,6 +146,10 @@ class Station:
         self.n_active_list = []
         self.ratio_load_SCH = float('inf')
         self.Q_station = 0.0
+        self.Q_demand = 0.0
+        self.Q_installed_active = 0.0
+        self.Q_unmet = 0.0
+        self.Q_unserved_off = 0.0
         self.P_station = 0.0
         self.P_chillers = 0.0
         self.P_pumps_chw = 0.0
@@ -164,8 +180,23 @@ class Station:
         else:
             self.ratio_load_SCH = self.ratio_load_r_SCH
         
-        if sum(self.n_active_list) <= 0:
+        # ===== 供冷缺口显式化（D6）=====
+        # 需求侧冷负荷与已投运额定制冷量取小者作为实际供冷量；
+        # 超出部分记为「供冷缺口」，不再以钳制后的负荷率冒充已满足。
+        self.Q_demand = load_building
+        self.Q_installed_active = self.get_Qr_active(self.n_active_list)
+        station_on = sum(self.n_active_list) > 0
+        if station_on:
+            self.Q_station = min(self.Q_demand, self.Q_installed_active)
+            self.Q_unmet = max(0.0, self.Q_demand - self.Q_installed_active)
+            self.Q_unserved_off = 0.0
+        else:
+            # 冷站因低于最小负荷率而停机：这部分不是"装机不足"，单独计数，避免与缺口混淆
             self.Q_station = 0.0
+            self.Q_unmet = 0.0
+            self.Q_unserved_off = self.Q_demand
+
+        if not station_on:
             self.P_station = 0.0
             self.P_chillers = 0.0
             self.P_pumps_chw = 0.0
@@ -174,7 +205,7 @@ class Station:
             self.COP_chillers = 0.0
             self.EERs = 0.0
         else:
-            self.Q_station = load_building
+            load_building = self.Q_station   # 只按实际供冷量分配到各通道
             self.ts_chw = self.station_info.ts_chw_set
             self.tr_chw = self.ts_chw + self.station_info.delta_t_chw
             self.Gw_chw  = self.Q_station / 4.187 / self.station_info.delta_t_chw
@@ -218,8 +249,10 @@ class Station:
                 self.COP_chillers = 0.0
             
         self.result = {
-            '冷负荷(kWh)': load_building,
+            '冷负荷(kWh)': self.Q_demand,
             '制冷量(kWh)': self.Q_station,
+            '供冷缺口(kWh)': self.Q_unmet,
+            '停机未供冷量(kWh)': self.Q_unserved_off,
             '冷机耗电量(kWh)': self.P_chillers,
             '冷冻泵耗电量(kWh)': self.P_pumps_chw,
             '冷却泵耗电量(kWh)': self.P_pumps_cw,

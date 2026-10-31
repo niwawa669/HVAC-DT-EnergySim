@@ -5,7 +5,12 @@ from device_model import *
     
 class Pump:
     
-    def __init__(self, model_file_path='model.pth'):
+    # 模型参考额定值：model.pth 训练时所对应的水泵设计点，不随选型参数变化
+    Gr_ref = 182.46
+    Hr_ref = 19.65
+    ratio_Hz_min_ref = 30.0 / 50.0
+
+    def __init__(self, model_file_path='model.pth', G_r=None, H_r=None, ratio_Hz_min=None):
         # 输入：'流量', '扬程'  输出：'功率', '最大流量', '最小扬程', '最大扬程'
         # 'G', 'H', 'P', 'Gmax', 'Hmin', 'Hmax'
         self.model = Model(2, 4, 128)
@@ -17,11 +22,25 @@ class Pump:
         else:
             raise FileNotFoundError("水泵的 model.pth 文件不存在")
         
-        self.Gr = 182.46
-        self.Hr = 19.65
-        self.ratio_Hz_min = 30.0 / 50.0
-        datas = torch.tensor([[self.Gr, self.Hr]], dtype=torch.float32)
-        self.P_r, self.Gmax_r, self.Hmin_r, self.Hmax_r = self.model(datas).squeeze().detach().numpy()
+        # 额定值由选型参数注入；未注入时沿用参考额定值（行为与改动前完全一致）
+        self.Gr = float(self.Gr_ref if G_r is None else G_r)
+        self.Hr = float(self.Hr_ref if H_r is None else H_r)
+        self.ratio_Hz_min = float(self.ratio_Hz_min_ref if ratio_Hz_min is None else ratio_Hz_min)
+        self.scale_applied = abs(self.Gr - self.Gr_ref) > 1e-9 or abs(self.Hr - self.Hr_ref) > 1e-9
+        # ===== 相似换算（亲和定律）=====
+        # 模型是在参考水泵（Gr_ref, Hr_ref）上训练的，输入为有量纲的 G、H。
+        # 若选型额定值与参考值不同，必须把工作点折算到参考尺度再喂模型，
+        # 再把输出折算回实际尺度，否则等于让模型在外推区间工作。
+        self.kG = self.Gr / self.Gr_ref
+        self.kH = self.Hr / self.Hr_ref
+        # 设计点：在参考尺度下求值，折算回实际尺度即为实际额定功率
+        datas = torch.tensor([[self.Gr_ref, self.Hr_ref]], dtype=torch.float32)
+        P_m, Gmax_m, Hmin_m, Hmax_m = self.model(datas).squeeze().detach().numpy()
+        self.P_r = float(P_m) * self.kG * self.kH
+        self.Gmax_r = float(Gmax_m) * self.kG
+        self.Hmin_r = float(Hmin_m) * self.kH
+        self.Hmax_r = float(Hmax_m) * self.kH
+        # 最小流量下限必须落在「实际尺度」上（见 D5 扩展）
         self.G_min = self.Gr * self.ratio_Hz_min
         
         self.P = 0
@@ -37,8 +56,14 @@ class Pump:
             self.Hmax = 0
             return self.P, self.Gmax, self.Hmin, self.Hmax
         
-        datas = torch.tensor([[G, H]], dtype=torch.float32)
-        self.P, self.Gmax, self.Hmin, self.Hmax = self.model(datas).squeeze().detach().numpy()
+        # 折算到参考尺度喂模型（kG = kH = 1 时与改动前完全一致）
+        datas = torch.tensor([[G / self.kG, H / self.kH]], dtype=torch.float32)
+        P_m, Gmax_m, Hmin_m, Hmax_m = self.model(datas).squeeze().detach().numpy()
+        # 输出折算回实际尺度：P ∝ G·H，Gmax ∝ G，Hmin/Hmax ∝ H
+        self.P = float(P_m) * self.kG * self.kH
+        self.Gmax = float(Gmax_m) * self.kG
+        self.Hmin = float(Hmin_m) * self.kH
+        self.Hmax = float(Hmax_m) * self.kH
         return self.P, self.Gmax, self.Hmin, self.Hmax
 
 

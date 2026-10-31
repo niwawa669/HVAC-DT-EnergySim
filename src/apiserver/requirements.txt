@@ -13,9 +13,17 @@ sqlalchemy==2.0.34
 aiosqlite==0.20.0
 
 # ===== 科学计算（Python 3.13 支持） =====
-# 注意：numpy 1.26.x 和 pandas 2.1.x 支持 Python 3.13
-numpy==1.26.4
-pandas==2.2.2
+# 项目后端运行环境为 Python 3.12（见 requirements 说明），numpy 1.26 与 2.x 均可用；
+# 若在 Python 3.13 下安装，pip 会自动解析到 numpy 2.1+（1.26 无 cp313 轮子）。
+numpy>=1.26,<3
+pandas>=2.2,<3
+
+# ===== 算法层（src/algorithm 硬依赖，此前缺失） =====
+# torch：加载 model_files/{chiller,pump,tower}/model.pth 做前向推理，cpu 版即可；
+#        本机验证环境 2.11.0+cpu。不写死精确版本，因为 "+cpu" 是本地构建标签。
+# CoolProp：airH2O.py 的湿空气物性（HAPropsSI / PropsSI）
+torch>=2.0
+CoolProp>=6.6
 
 # ===== 异步任务 =====
 celery==5.4.0

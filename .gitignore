@@ -1,0 +1,14 @@
+# 报告快照产物（由 report_service 生成，不入库）
+data/reports/
+
+# Python
+__pycache__/
+*.pyc
+
+# 依赖与构建产物
+node_modules/
+src/main/node_modules/
+dist/
+
+# 本地环境
+.env

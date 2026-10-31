@@ -1,4 +1,5 @@
-import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 
 import Login from '@/views/Login.vue'
@@ -6,6 +7,7 @@ import Dashboard from '@/views/Dashboard.vue'
 import ProjectNew from '@/views/ProjectNew.vue'
 import Projects from '@/views/Projects.vue'
 import SimulationView from '@/views/SimulationView.vue'
+import ReportView from '@/views/ReportView.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 
 const routes = [
@@ -24,6 +26,7 @@ const routes = [
       { path: 'project/new', name: 'ProjectNew', component: ProjectNew },
       { path: 'projects', name: 'Projects', component: Projects },
       { path: 'simulation/:taskId', name: 'SimulationView', component: SimulationView },
+      { path: 'report/:reportId', name: 'ReportView', component: ReportView },
     ],
   },
 ] as RouteRecordRaw[]

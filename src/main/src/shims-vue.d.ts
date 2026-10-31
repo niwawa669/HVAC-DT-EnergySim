@@ -4,43 +4,6 @@ declare module '*.vue' {
   export default component
 }
 
-// 声明所有 @/ 路径下的模块为 any 类型（快速解决）
-declare module '@/views/*' {
-  const content: any
-  export default content
-}
-
-declare module '@/components/*' {
-  const content: any
-  export default content
-}
-
-declare module '@/components/layout/*' {
-  const content: any
-  export default content
-}
-
-declare module '@/stores/*' {
-  const content: any
-  export default content
-}
-
-declare module '@/utils/*' {
-  const content: any
-  export default content
-}
-
-declare module '@/composables/*' {
-  const content: any
-  export default content
-}
-
-declare module '@/api/*' {
-  const content: any
-  export default content
-}
-
-declare module '@/mocks/*' {
-  const content: any
-  export default content
-}
+// 注意：此处曾用 `declare module '@/views/*'` 之类通配声明把所有目录退化为 any，
+// 使类型检查形同虚设（vue-tsc 永远通过）。已移除，改为依赖真实模块解析。
+// 若某个第三方包缺类型，请为其单独写 *.d.ts，而不是再次引入通配声明。

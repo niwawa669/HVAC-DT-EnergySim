@@ -87,6 +87,20 @@ class SimulationService:
             rows = request_data["data"]["rows"]
             config = request_data.get("config", {})
             area = request_data.get("area", 2931.0)
+
+            # 元信息：项目标识 + 数据溯源（4.3/4.4），随结果一并输出
+            task = self.tasks.get(task_id, {})
+            data_meta = task.get("data_meta") or {}
+            run_meta = {
+                "fileName": data_meta.get("fileName"),
+                "totalRows": data_meta.get("totalRows", len(rows)),
+                "confirmedRange": data_meta.get("confirmedRange"),
+                "correctedOutliers": data_meta.get("correctedOutliers", 0),
+                "projectName": task.get("project_name"),
+                "buildingType": task.get("building_type"),
+                "area": area,
+                "parameters": config,
+            }
             
             print(f"📊 数据行数: {len(rows)}, 建筑面积: {area} m²")
             print(f"📋 配置参数: {config.get('Qr_chiller_BCH')} kW 大机, {config.get('Qr_chiller_SCH')} kW 小机")
@@ -97,11 +111,13 @@ class SimulationService:
             for week_result in algorithm_wrapper.run_simulation_streaming(
                 data=rows,
                 config=config,
-                area=area
+                area=area,
+                meta=run_meta
             ):
                 week_count += 1
                 week_number = week_result.get('weekNumber', week_count)
-                progress = int((week_count / 52) * 100) if week_count <= 52 else 100
+                # 进度按小时数计算（不再假设固定 52 周）
+                progress = int(round(week_result.get('progressPercentage', 0)))
                 
                 if task_id in self.tasks:
                     self.tasks[task_id]["progress"] = progress
@@ -130,13 +146,19 @@ class SimulationService:
             # ===== 获取汇总结果 =====
             summary = algorithm_wrapper.get_last_summary()
             weekly_results = algorithm_wrapper.get_last_weekly_data()
+            monthly_results = algorithm_wrapper.get_last_monthly_data()
+            run_meta = algorithm_wrapper.get_last_meta()
+            unmet_hours = algorithm_wrapper.get_last_unmet_hours()
             
             if task_id in self.tasks:
                 self.tasks[task_id]["status"] = "completed"
                 self.tasks[task_id]["progress"] = 100
                 self.tasks[task_id]["result"] = {
+                    "meta": run_meta,
                     "summary": summary,
-                    "weekly_data": weekly_results
+                    "weekly_data": weekly_results,
+                    "monthly_data": monthly_results,
+                    "unmet_hours_detail": unmet_hours,
                 }
                 self.tasks[task_id]["updated_at"] = datetime.now().isoformat()
             

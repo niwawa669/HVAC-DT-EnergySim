@@ -10,12 +10,12 @@ from airH2O import *
 @dataclass
 class ChannelInfo:
     # 建筑暖通设计参数：load = 196572kW / 26.6, t_dry_W = 31.7, da_w = 0.02347
-    load_building_r: float = 196572.0 # 建筑负荷 kW
-    load_coe: float = 1.0 / 26.6 # 建筑负荷修正系数
-    coe: float = 1.0 / 1.2 # 系统能效修正系数
-    coe_tower_efficience: float = 0.95 # 冷却塔风机效率缩放系数
+    load_building_r: float = 196572.0 # 建筑负荷（原始单位，见 docs/data-contract.md）
+    # 量纲换算（D8）：由 Station 统一施加于冷负荷；本字段仅用于把
+    # load_building_r 折算到计算量纲（水力计算分母），通道内不重复相乘。
+    load_coe: float = 0.001
     
-    Qr_chiller: float = 2112.6 # 冷机额定冷量 kW
+    Qr_chiller: float = 79.4808 # 冷机额定冷量 kW（默认与重标定后的选型一致；Station 会显式覆盖）
     n_design: int = 3 # 冷机设计台数
     tr_cw_design: float = 30.0 # 冷却水回水温度设计值
     ts_cw_design: float = 35.0 # 冷却水出水温度设计值
@@ -36,12 +36,15 @@ class ChannelInfo:
 
     Gr_chiller_chw: float = 100.9 # 大机冷冻泵设计流量 L/s 92.0/32.0
     Hr_pump_chw: float = 32.0 # 大机冷冻泵设计杨程  mH2O
-    
+    n_pump_chw: int = 3 # 冷冻泵台数（D7：作为功率乘数，且不得少于同时投运的冷机台数）
+
     Gr_chiller_cw: float = 126.1 # 大机冷却泵设计流量 L/s 155.0/25.5
     Hr_pump_cw: float = 25.0 # 大机冷却泵设计杨程  mH2O
+    n_pump_cw: int = 3 # 冷却泵台数
     
     Gr_tower: float = 200.0 # 大机冷却塔设计流量 L/s 200.0L/s / 32.0℃/23.65℃ / 36.0℃/30.44℃ / 58910m^3/h / 22kW
-    Pr_tower: float = 22.0 # 大机冷却塔设计功率 kW
+    Pr_tower: float = 22.0 # 大机冷却塔设计功率 kW（仅展示与标称校核，不参与功率计算）
+    n_tower: int = 3 # 冷却塔台数
     
     ratio_Hz_min_pump: float = 30.0 / 50.0 # 冷却塔风机最小频率/最大频率
     ratio_Hz_min_tower:float = 20.0 / 50.0 # 冷却塔风机最小频率/最大频率
@@ -52,10 +55,12 @@ class Channel:
     def __init__(self, channel_info: ChannelInfo):
         self.channel_info = channel_info
         
-        self.chiller = Chiller()
-        self.pump_chw = Pump()
-        self.pump_cw = Pump()
-        self.tower = Tower()
+        # 设备额定值一律由通道配置注入（单一口径：选型参数即模型额定值）。
+        # 未注入的维度沿用模型的参考额定值，故默认参数下行为与改动前一致。
+        self.chiller = Chiller(Q_r=channel_info.Qr_chiller)
+        self.pump_chw = Pump(G_r=channel_info.Gr_chiller_chw, H_r=channel_info.Hr_pump_chw)
+        self.pump_cw = Pump(G_r=channel_info.Gr_chiller_cw, H_r=channel_info.Hr_pump_cw)
+        self.tower = Tower(Gw_r=channel_info.Gr_tower, P_r=channel_info.Pr_tower)
         self.get_S_pipes_chw()
         self.get_S_pipes_cw()
         
@@ -79,7 +84,7 @@ class Channel:
         self.ratio_Ga_tower = 1.0
     
     def __call__(self, load, ta_dry_W, da_W, n_active):
-        load *= self.channel_info.load_coe
+        # 冷负荷的量纲换算由 Station 统一完成，此处保持原值（避免重复换算）
         self.ta_dry_W = ta_dry_W
         self.da_W = da_W
         self.ta_wet_W = td_b(ta_dry_W, da_W)
@@ -191,10 +196,11 @@ class Channel:
             tr_cw_tmp, P_tower = self.tower(self.ta_dry_W, self.da_W, self.ts_cw, Gw_cw_chiller, Ga_tower)
             
             # 分别计算所有在线冷机、泵和塔的功率总和，以及冷却回水温度tr_cw_tmp
+            # 各设备功率按其「自身台数」累加（D7）；泵/塔台数不得少于投运冷机台数
             self.P_chillers = P_chiller * self.n_active
-            self.P_pumps_chw = P_pump_chw * self.n_active
-            self.P_pumps_cw = P_pump_cw * self.n_active
-            self.P_towers = P_tower * self.n_active
+            self.P_pumps_chw = P_pump_chw * self.channel_info.n_pump_chw
+            self.P_pumps_cw = P_pump_cw * self.channel_info.n_pump_cw
+            self.P_towers = P_tower * self.channel_info.n_tower
             self.Gw_cw = Gw_cw_chiller * self.n_active
             self.P_channel = self.P_chillers + self.P_pumps_chw + self.P_pumps_cw + self.P_towers
         else:

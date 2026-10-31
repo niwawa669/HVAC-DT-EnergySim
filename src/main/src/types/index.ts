@@ -1,3 +1,19 @@
+// 通用类型定义
+// 注意：仿真相关的周度/月度/结果类型以 `@/api/simulation` 为唯一来源，
+// 此处仅做再导出，避免两套定义漂移（见 simulation-result-contract D9）。
+
+export type {
+  WeeklyData,
+  MonthlyData,
+  PeakContext,
+  SimulationSummary,
+  SimulationMeta,
+  SimulationResult,
+  EnergyBreakdown,
+} from '@/api/simulation'
+
+import type { WeeklyData as WeeklyDataFromApi } from '@/api/simulation'
+
 // 用户相关类型
 export interface User {
   id: number
@@ -45,26 +61,10 @@ export interface SimulationTask {
   errorMessage?: string
 }
 
-// 周度数据
-export interface WeeklyData {
-  weekNumber: number
-  progressPercentage: number
-  totalEnergyConsumption: number
-  totalCoolingLoad: number
-  totalHeatingLoad: number
-  avgOutdoorTemp: number
-  avgSystemCop: number
-}
-
-// WebSocket 消息类型
+// WebSocket 消息类型（进度消息的 data 复用周度结构）
 export interface WebSocketMessage {
-  type: 'progress' | 'completed' | 'failed'
-  data?: WeeklyData
-  summary?: {
-    total_energy: number
-    eui: number
-    peak_load: number
-    avg_cop: number
-  }
+  type: 'connected' | 'started' | 'progress' | 'completed' | 'failed' | 'cancelled' | 'pong'
+  data?: WeeklyDataFromApi
+  summary?: Record<string, any>
   error?: string
 }

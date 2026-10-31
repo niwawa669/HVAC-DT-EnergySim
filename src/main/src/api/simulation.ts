@@ -4,9 +4,7 @@ import { api } from './index'
 export interface EquipmentConfig {
   // 建筑负荷
   load_building_r: number
-  load_coe: number
-  coe: number
-  coe_tower_efficience: number
+  load_coe: number // 量纲换算 W -> kW（口径 v1）
 
   // 冷机参数
   Qr_chiller_BCH: number
@@ -114,29 +112,127 @@ export interface SimulationStatus {
   message?: string
 }
 
-// ===== 仿真结果 =====
+// ===== 仿真结果（七个区块，唯一类型来源）=====
+export interface EnergyBreakdown {
+  chiller: number
+  pump_chw: number
+  pump_cw: number
+  tower: number
+}
+
+export interface WeeklyData {
+  weekNumber: number
+  weekLabel?: string | null
+  weekStart?: string | null
+  weekEnd?: string | null
+  hours: number
+  totalCoolingLoad: number
+  peakCoolingLoad: number
+  totalQStation: number
+  totalEnergyConsumption: number
+  avgSystemCop: number
+  avgChillerCop: number
+  avgOutdoorTemp: number
+  breakdown?: EnergyBreakdown | null
+  supplyGap: number
+  unservedWhenOff: number
+  unmetHours: number
+  progressPercentage: number
+}
+
+export interface MonthlyData {
+  month?: string | null
+  hours: number
+  totalCoolingLoad: number
+  totalQStation: number
+  totalEnergyConsumption: number
+  avgChillerCop: number
+  systemEER: number
+  breakdown?: EnergyBreakdown | null
+  supplyGap: number
+}
+
+export interface PeakContext {
+  timestamp?: string | null
+  load: number
+  loadUnit: string
+  temperature?: number | null
+  humid?: number | null
+  qStation: number
+  chillerCOP: number
+  systemEER: number
+  loadRate: number
+  nSCH: number
+  nBCH: number
+}
+
+export interface SimulationSummary {
+  totalEnergy: number
+  totalCoolingLoad: number
+  totalQStation: number
+  peakCoolingLoad: number
+  eui: number
+  avgCop: number
+  systemEER: number
+  totalUnmet: number
+  unmetHours: number
+  totalUnservedOff: number
+  carbonEmission: number
+  area: number
+}
+
+export interface SimulationMeta {
+  fileName?: string | null
+  totalRows: number
+  totalHours: number
+  startTime?: string | null
+  endTime?: string | null
+  confirmedRange?: string | null
+  correctedOutliers: number
+  tDryMin?: number | null
+  tDryMax?: number | null
+  humidMin?: number | null
+  humidMax?: number | null
+  weeks: number
+  projectName?: string | null
+  buildingType?: string | null
+  area: number
+  caliberVersion: string
+  loadCoe?: number | null
+  carbonFactor: Record<string, any>
+  applicableRange: Record<string, any>
+  applicableRangeSource?: string | null
+  extrapolation: Record<string, any>
+  parameters: Record<string, any>
+  displayOnly: string[]
+  displayOnlyDeviations: Record<string, any>
+}
+
+export interface UnmetHour {
+  timestamp?: string | null
+  demand: number
+  served: number
+  unmet: number
+  loadRate: number
+  nSCH: number
+  nBCH: number
+  temperature?: number | null
+}
+
 export interface SimulationResult {
   taskId: string
   projectId: number
-  summary: {
-    totalEnergy: number
-    totalCoolingLoad: number
-    totalQStation: number
-    peakCoolingLoad: number
-    eui: number
-    avgCop: number
-    carbonEmission: number
-  }
-  weeklyData: Array<{
-    weekNumber: number
-    totalCoolingLoad: number
-    peakCoolingLoad: number
-    totalQStation: number
-    totalEnergyConsumption: number
-    avgSystemCop: number
-    avgOutdoorTemp: number
-  }>
   createdAt: string
+  meta: SimulationMeta
+  summary: SimulationSummary
+  weekly: WeeklyData[]
+  monthly: MonthlyData[]
+  breakdown: EnergyBreakdown
+  operating_stats: Record<string, number>
+  peak_context: PeakContext
+  unmet_hours_detail: UnmetHour[]
+  /** 负荷率分布：长度恒为 10，第 i 个元素为负荷率落在 [i/10, (i+1)/10) 的逐时计数，末区间含 1.0 */
+  load_rate_histogram: number[]
 }
 
 /**
@@ -176,7 +272,7 @@ export async function restartSimulation(
 }
 
 /**
- * 获取仿真结果
+ * 获取仿真结果（七区块）
  */
 export async function getSimulationResults(taskId: string): Promise<SimulationResult> {
   const response = await api.get(`/simulate/results/${taskId}`)
