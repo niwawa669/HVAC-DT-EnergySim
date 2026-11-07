@@ -1,9 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from typing import Dict, Any
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Dict, Any, Optional
 from datetime import datetime
 import uuid
-import asyncio
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_user
+from app.db.session import get_db
 from app.models.schemas import (
     StartSimulationRequest,
     TaskResponse,
@@ -17,20 +20,21 @@ from app.models.schemas import (
     PeakContext,
     UnmetHour,
 )
-from app.services.simulation_service import simulation_service
+from app.repositories import datasets as datasets_repo
+from app.repositories import projects as projects_repo
+from app.repositories import results as results_repo
+from app.repositories import tasks as tasks_repo
 from app.services.algorithm_wrapper import algorithm_wrapper
-from app.api.deps import get_current_user
+from app.services.simulation_service import simulation_service
 
 router = APIRouter(prefix="/simulate", tags=["simulation"])
 
 HISTOGRAM_BINS = 10
+TERMINAL_STATUSES = ("completed", "failed", "cancelled")
 
 
 def _normalise_histogram(raw) -> list:
-    """把负荷率分布规范为长度 10 的整数列表（D8）。
-
-    缺失或非法输入一律回落为 10 个 0，保证字段长度恒定、消费方无需做存在性判断。
-    """
+    """把负荷率分布规范为长度 10 的整数列表（D8）。"""
     try:
         values = [int(round(float(v))) for v in (raw or [])]
     except (TypeError, ValueError):
@@ -39,202 +43,242 @@ def _normalise_histogram(raw) -> list:
     return values + [0] * (HISTOGRAM_BINS - len(values))
 
 
+async def _get_task_or_404(
+    db: AsyncSession, task_id: str, current_user: Dict, action: str = "访问"
+):
+    task = await tasks_repo.get(db, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if task.user_id != current_user.get("id") and current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail=f"无权{action}此任务")
+    return task
+
+
+def _task_response(task) -> TaskResponse:
+    return TaskResponse(
+        taskId=task.id,
+        status=TaskStatus(task.status),
+        progress=task.progress,
+        currentWeek=task.current_week,
+        totalWeeks=task.total_weeks,
+        startedAt=task.started_at,
+        updatedAt=task.updated_at,
+        message=task.error,
+    )
+
+
 @router.post("/start", response_model=TaskResponse)
 async def start_simulation(
     request: StartSimulationRequest,
-    background_tasks: BackgroundTasks,
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """启动仿真任务"""
+    """启动仿真任务：留存输入数据 + 任务落库，再交给后台执行。"""
     try:
-        request_dict = request.model_dump()
-        task_id = str(uuid.uuid4())
+        request_dict = request.model_dump(mode="json")
 
         # 6.5：参数未映射时在启动前拒绝，并指名参数
         try:
             algorithm_wrapper.validate_config(request_dict.get("config"))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-        
-        # 初始化任务状态
-        simulation_service.tasks[task_id] = {
-            "status": "pending",
-            "progress": 0,
-            "current_week": 0,
-            "total_weeks": 52,
-            "started_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
-            "config": request_dict.get("config"),
-            "data": request_dict.get("data"),
-            "data_meta": request_dict.get("dataMeta"),
-            "project_name": request_dict.get("projectName"),
-            "building_type": request_dict.get("buildingType"),
-            "area": request_dict.get("area", 2931.0),
-            "user_id": current_user.get("id"),
-            "result": None,
-            "error": None
-        }
-        
-        print(f"🚀 创建仿真任务: {task_id}")
-        print(f"📋 配置参数: 大机 {request_dict.get('config', {}).get('Qr_chiller_BCH')} kW, "
-              f"小机 {request_dict.get('config', {}).get('Qr_chiller_SCH')} kW")
-        
-        asyncio.create_task(
-            simulation_service._run_simulation_task(task_id, request_dict)
+
+        data = request_dict.get("data") or {}
+        rows = data.get("rows") or []
+        if not rows:
+            raise HTTPException(status_code=400, detail="数据不能为空")
+        headers = data.get("headers") or list(rows[0].keys())
+        time_column = data.get("timeColumn") or (headers[0] if headers else None)
+
+        # 先确定项目归属，避免校验失败时已经在磁盘留下数据文件。
+        # 未显式传 projectId 时，按（owner, 项目名）自动创建/复用项目，
+        # 否则"完成一次仿真"在项目列表里永远看不到。
+        project_id = request_dict.get("projectId")
+        if project_id is not None:
+            project = await projects_repo.get(db, int(project_id))
+            if project is None:
+                raise HTTPException(status_code=404, detail="项目不存在")
+            if project.owner_id != current_user.get("id") and current_user.get("role") != "admin":
+                raise HTTPException(status_code=403, detail="无权在该项目下创建任务")
+        else:
+            project = await projects_repo.get_or_create_for_simulation(
+                db,
+                owner_id=current_user.get("id"),
+                name=request.projectName,
+                building_type=request_dict.get("buildingType"),
+                area=request.area,
+            )
+            project_id = project.id
+
+        await projects_repo.update_status(db, project, "pending")
+
+        data_meta = dict(request_dict.get("dataMeta") or {})
+        dataset = await datasets_repo.save_from_rows(
+            db,
+            rows=rows,
+            headers=headers,
+            time_column=time_column,
+            filename=data_meta.get("fileName"),
+            uploaded_by=current_user.get("id"),
         )
-        
+
+        task_id = str(uuid.uuid4())
+        data_meta["datasetId"] = dataset.id
+        data_meta.setdefault("sha256", dataset.sha256)
+        data_meta.setdefault("totalRows", len(rows))
+
+        await tasks_repo.create(
+            db,
+            task_id=task_id,
+            user_id=current_user.get("id"),
+            project_id=int(project_id),
+            dataset_id=dataset.id,
+            project_name=request.projectName,
+            building_type=request_dict.get("buildingType"),
+            area=request.area,
+            config=request_dict.get("config"),
+            data_meta=data_meta,
+        )
+        # 先提交，确保后台任务能读到自己这一行
+        await db.commit()
+
+        print(f"🚀 创建仿真任务: {task_id}")
+        simulation_service.start_task(task_id, request_dict)
+
         return TaskResponse(
             taskId=task_id,
             status=TaskStatus.PENDING,
             progress=0,
             currentWeek=0,
             totalWeeks=52,
-            message="仿真任务已启动"
+            message="仿真任务已启动",
         )
-        
-    except Exception as e:
-        print(f"❌ 启动仿真失败: {e}")
+
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        print(f"❌ 启动仿真失败: {exc}")
         import traceback
+
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/status/{task_id}", response_model=TaskResponse)
 async def get_simulation_status(
     task_id: str,
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """获取仿真任务状态"""
-    status = simulation_service.get_task_status(task_id)
-    
-    if not status:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    
-    if status.get("user_id") != current_user.get("id"):
-        if current_user.get("role") != "admin":
-            raise HTTPException(status_code=403, detail="无权访问此任务")
-    
-    return TaskResponse(
-        taskId=task_id,
-        status=TaskStatus(status["status"]),
-        progress=status.get("progress", 0),
-        currentWeek=status.get("current_week", 0),
-        totalWeeks=status.get("total_weeks", 52),
-        startedAt=status.get("started_at"),
-        updatedAt=status.get("updated_at"),
-        message=status.get("error")
-    )
+    """获取仿真任务状态。"""
+    task = await _get_task_or_404(db, task_id, current_user)
+    return _task_response(task)
 
 
 @router.post("/cancel/{task_id}")
 async def cancel_simulation(
     task_id: str,
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """取消仿真任务"""
-    status = simulation_service.get_task_status(task_id)
-    
-    if not status:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    
-    if status.get("user_id") != current_user.get("id"):
-        if current_user.get("role") != "admin":
-            raise HTTPException(status_code=403, detail="无权操作此任务")
-    
-    if status["status"] in ["completed", "failed", "cancelled"]:
+    """取消仿真任务。"""
+    task = await _get_task_or_404(db, task_id, current_user, action="操作")
+
+    if task.status in TERMINAL_STATUSES:
         raise HTTPException(status_code=400, detail="任务已完成或已取消")
-    
-    success = simulation_service.cancel_task(task_id)
-    
-    if not success:
-        raise HTTPException(status_code=400, detail="取消任务失败")
-    
-    asyncio.create_task(
-        simulation_service._send_websocket_message(task_id, {
-            "type": "cancelled",
-            "message": "仿真任务已取消"
-        })
-    )
-    
+
+    await tasks_repo.set_status(db, task_id, "cancelled")
+    await db.commit()
+
+    await simulation_service._send_websocket_message(task_id, {
+        "type": "cancelled",
+        "message": "仿真任务已取消",
+    })
+
     return {"message": "仿真已取消", "taskId": task_id}
 
 
 @router.post("/restart/{task_id}", response_model=TaskResponse)
 async def restart_simulation(
     task_id: str,
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """重新仿真 - 使用相同的任务ID重新计算"""
+    """重新仿真：从留存数据集回读输入，使用相同任务 ID 重算。"""
     try:
-        status = simulation_service.get_task_status(task_id)
-        
-        if not status:
-            raise HTTPException(status_code=404, detail="任务不存在")
-        
-        if status.get("user_id") != current_user.get("id"):
-            if current_user.get("role") != "admin":
-                raise HTTPException(status_code=403, detail="无权操作此任务")
-        
-        simulation_service.reset_task(task_id)
-        
+        task = await _get_task_or_404(db, task_id, current_user, action="操作")
+
+        if not task.dataset_id:
+            raise HTTPException(status_code=400, detail="任务缺少留存输入数据，无法重新仿真")
+
+        try:
+            _, document = await datasets_repo.load_document(db, task.dataset_id)
+        except datasets_repo.DatasetError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
         request_data = {
-            "config": status.get("config"),
-            "data": status.get("data"),
-            "projectName": status.get("project_name"),
-            "buildingType": status.get("building_type"),
-            "area": status.get("area", 2931.0)
+            "config": task.config,
+            "data": {
+                "rows": document.get("rows") or [],
+                "headers": document.get("headers") or [],
+                "timeColumn": document.get("timeColumn"),
+            },
+            "projectName": task.project_name,
+            "buildingType": task.building_type,
+            "area": task.area if task.area else 2931000.0,
+            "dataMeta": task.data_meta or {},
         }
-        
-        asyncio.create_task(
-            simulation_service._run_simulation_task(task_id, request_data)
-        )
-        
+
+        await tasks_repo.reset_for_restart(db, task_id)
+        await db.commit()
+
+        simulation_service.start_task(task_id, request_data)
+
         return TaskResponse(
             taskId=task_id,
             status=TaskStatus.PENDING,
             progress=0,
             currentWeek=0,
             totalWeeks=52,
-            message="仿真已重新启动"
+            message="仿真已重新启动",
         )
-        
-    except Exception as e:
-        print(f"❌ 重新仿真失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        print(f"❌ 重新仿真失败: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/results/{task_id}", response_model=SimulationResultResponse)
 async def get_simulation_results(
     task_id: str,
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """获取仿真结果"""
-    status = simulation_service.get_task_status(task_id)
-    
-    if not status:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    
-    if status.get("user_id") != current_user.get("id"):
-        if current_user.get("role") != "admin":
-            raise HTTPException(status_code=403, detail="无权访问此任务")
-    
-    if status["status"] != "completed":
-        raise HTTPException(status_code=400, detail="任务尚未完成")
-    
-    result = status.get("result")
+    """获取仿真结果（七区块）。"""
+    task = await _get_task_or_404(db, task_id, current_user)
 
+    if task.status != "completed":
+        raise HTTPException(status_code=400, detail="任务尚未完成")
+
+    result = await results_repo.load_payload(db, task_id)
     if not result:
         raise HTTPException(status_code=404, detail="结果不存在")
 
-    summary = result.get("summary", {})
-    weekly_data = result.get("weekly_data", [])
-    monthly_data = result.get("monthly_data", [])
-    meta = result.get("meta", {})
+    summary = result.get("summary") or {}
+    weekly_data = result.get("weekly_data") or []
+    monthly_data = result.get("monthly_data") or []
+    meta = result.get("meta") or {}
 
-    def _bd(d):
-        d = d or {}
-        return EnergyBreakdown(chiller=d.get("chiller", 0), pump_chw=d.get("pump_chw", 0),
-                               pump_cw=d.get("pump_cw", 0), tower=d.get("tower", 0))
+    def _bd(item):
+        item = item or {}
+        return EnergyBreakdown(
+            chiller=item.get("chiller", 0),
+            pump_chw=item.get("pump_chw", 0),
+            pump_cw=item.get("pump_cw", 0),
+            tower=item.get("tower", 0),
+        )
 
     breakdown = _bd(summary.get("breakdown"))
     peak = summary.get("peakContext") or {}
@@ -242,8 +286,8 @@ async def get_simulation_results(
     # 七个区块始终存在，无数据时以空集合或零值表达（D4 / 7.1）
     return SimulationResultResponse(
         taskId=task_id,
-        projectId=1,
-        createdAt=status.get("started_at", datetime.now().isoformat()),
+        projectId=task.project_id or 0,
+        createdAt=task.started_at.isoformat() if task.started_at else datetime.now().isoformat(),
         meta=SimulationMeta(**{k: meta[k] for k in meta if k in SimulationMeta.model_fields}),
         summary=SimulationSummary(
             totalEnergy=summary.get("totalEnergy", 0),
@@ -252,6 +296,7 @@ async def get_simulation_results(
             peakCoolingLoad=summary.get("peakCoolingLoad", 0),
             eui=summary.get("eui", 0),
             avgCop=summary.get("avgCop", 0),
+            avgChillerLoadRate=summary.get("avgChillerLoadRate", 0),
             systemEER=summary.get("systemEER", 0),
             totalUnmet=summary.get("totalUnmet", 0),
             unmetHours=summary.get("unmetHours", 0),
@@ -314,24 +359,12 @@ async def get_simulation_results(
 
 @router.get("/list")
 async def list_simulations(
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """获取用户的所有仿真任务列表"""
-    tasks = []
-    for task_id, status in simulation_service.tasks.items():
-        if status.get("user_id") == current_user.get("id") or current_user.get("role") == "admin":
-            tasks.append({
-                "taskId": task_id,
-                "status": status.get("status"),
-                "progress": status.get("progress", 0),
-                "projectName": status.get("project_name"),
-                "startedAt": status.get("started_at"),
-                "updatedAt": status.get("updated_at")
-            })
-    
-    tasks.sort(key=lambda x: x.get("updatedAt", ""), reverse=True)
-    
-    return {
-        "tasks": tasks,
-        "total": len(tasks)
-    }
+    """获取用户的所有仿真任务列表。"""
+    rows = await tasks_repo.list_for_user(
+        db, current_user.get("id"), current_user.get("role") == "admin"
+    )
+    tasks = [tasks_repo.summarize(task) for task in rows]
+    return {"tasks": tasks, "total": len(tasks)}

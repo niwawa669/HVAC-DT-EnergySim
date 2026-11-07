@@ -1,0 +1,27 @@
+{
+ "purpose": "design-sheet-consistency 改动前基线",
+ "captured_at": "2026-11-01T18:03:12",
+ "design_sheet": {
+  "COP_chiller_BCH": 5.5,
+  "COP_chiller_SCH": 5.0,
+  "Gr_pump_chw_BCH": 2018.0,
+  "Gr_pump_cw_BCH": 2522.0,
+  "Gr_tower_BCH": 4000.0,
+  "Gr_pump_chw_SCH": 1009.0,
+  "Gr_pump_cw_SCH": 1261.2,
+  "Gr_tower_SCH": 2000.0,
+  "Pr_tower_BCH": 440.0,
+  "Pr_tower_SCH": 240.0,
+  "Qr_chiller_BCH": 42252.0,
+  "Qr_chiller_SCH": 21126.0
+ },
+ "displayOnly": [
+  "COP_chiller_BCH",
+  "COP_chiller_SCH",
+  "Pr_tower_BCH",
+  "Pr_tower_SCH"
+ ],
+ "installedCapacity": 316889.99999999994,
+ "designMargin": 11.27087480611456,
+ "tower_energy_720h": 2636.71
+}

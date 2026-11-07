@@ -34,19 +34,8 @@ export interface LoginParams {
   password: string
 }
 
-// 项目相关类型
-export interface Project {
-  id: number
-  name: string
-  buildingType: string
-  systemType: string
-  operationSchedule: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  createdAt: string
-  updatedAt?: string
-  ownerId?: number
-  config?: Record<string, any>
-}
+// 项目相关类型：以 api/projects 为唯一来源（与后端项目接口一致）
+export type { Project, LatestTask, LatestSummary } from '@/api/projects'
 
 // 仿真任务相关类型
 export interface SimulationTask {

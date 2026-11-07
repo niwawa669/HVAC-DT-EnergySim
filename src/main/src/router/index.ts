@@ -8,6 +8,8 @@ import ProjectNew from '@/views/ProjectNew.vue'
 import Projects from '@/views/Projects.vue'
 import SimulationView from '@/views/SimulationView.vue'
 import ReportView from '@/views/ReportView.vue'
+import AccountView from '@/views/AccountView.vue'
+import AdminUsers from '@/views/AdminUsers.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 
 const routes = [
@@ -27,6 +29,13 @@ const routes = [
       { path: 'projects', name: 'Projects', component: Projects },
       { path: 'simulation/:taskId', name: 'SimulationView', component: SimulationView },
       { path: 'report/:reportId', name: 'ReportView', component: ReportView },
+      { path: 'account', name: 'Account', component: AccountView },
+      {
+        path: 'admin/users',
+        name: 'AdminUsers',
+        component: AdminUsers,
+        meta: { requiresAdmin: true },
+      },
     ],
   },
 ] as RouteRecordRaw[]
@@ -49,6 +58,9 @@ router.beforeEach((to, from, next) => {
     })
   } else if (to.path === '/login' && userStore.isLoggedIn) {
     // 已登录，访问登录页，跳转到首页
+    next('/')
+  } else if (to.meta.requiresAdmin && !userStore.isAdmin) {
+    // 非管理员不暴露账户管理页
     next('/')
   } else {
     next()

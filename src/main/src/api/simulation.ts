@@ -4,41 +4,33 @@ import { api } from './index'
 export interface EquipmentConfig {
   // 建筑负荷
   load_building_r: number
-  load_coe: number // 量纲换算 W -> kW（口径 v1）
+  capacity_factor: number // 冷机容量放大系数：实际单机容量 = 基准容量 × 该系数
 
   // 冷机参数
   Qr_chiller_BCH: number
   n_design_BCH: number
-  COP_chiller_BCH: number // 新增
   Qr_chiller_SCH: number
   n_design_SCH: number
-  COP_chiller_SCH: number // 新增
   ts_chw_design: number
   tr_chw_design: number
   tr_cw_design: number
   ts_cw_design: number
 
   // 冷却塔参数
-  Gr_tower_BCH: number
   Pr_tower_BCH: number
   Hs_tower_BCH: number
   n_tower_BCH: number // 新增
-  Gr_tower_SCH: number
   Pr_tower_SCH: number
   Hs_tower_SCH: number
   n_tower_SCH: number // 新增
 
   // 水泵参数
-  Gr_pump_chw_BCH: number
   Hr_pump_chw_BCH: number
   n_pump_chw_BCH: number // 新增
-  Gr_pump_chw_SCH: number
   Hr_pump_chw_SCH: number
   n_pump_chw_SCH: number // 新增
-  Gr_pump_cw_BCH: number
   Hr_pump_cw_BCH: number
   n_pump_cw_BCH: number // 新增
-  Gr_pump_cw_SCH: number
   Hr_pump_cw_SCH: number
   n_pump_cw_SCH: number // 新增
 
@@ -173,6 +165,8 @@ export interface SimulationSummary {
   peakCoolingLoad: number
   eui: number
   avgCop: number
+  /** 全年冷机平均负荷率（%）= 冷源站总供冷量 ÷ Σ(在线冷机额定制冷量 × 1h) */
+  avgChillerLoadRate?: number
   systemEER: number
   totalUnmet: number
   unmetHours: number
@@ -198,7 +192,11 @@ export interface SimulationMeta {
   buildingType?: string | null
   area: number
   caliberVersion: string
-  loadCoe?: number | null
+  // ===== 选型尺度（口径 v2）=====
+  capacityFactor?: number | null   // 冷机容量放大系数
+  peakLoad?: number | null         // 建筑负荷最大值 kW
+  installedCapacity?: number | null // 总装机容量 kW
+  designMargin?: number | null     // 设计裕度 = 总装机 ÷ 峰值负荷
   carbonFactor: Record<string, any>
   applicableRange: Record<string, any>
   applicableRangeSource?: string | null

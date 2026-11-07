@@ -10,12 +10,16 @@ from airH2O import *
 @dataclass
 class ChannelInfo:
     # 建筑暖通设计参数：load = 196572kW / 26.6, t_dry_W = 31.7, da_w = 0.02347
-    load_building_r: float = 196572.0 # 建筑负荷（原始单位，见 docs/data-contract.md）
-    # 量纲换算（D8）：由 Station 统一施加于冷负荷；本字段仅用于把
-    # load_building_r 折算到计算量纲（水力计算分母），通道内不重复相乘。
-    load_coe: float = 0.001
+    load_building_r: float = 303067.16 # 建筑设计峰值负荷 kW（缺省取示例数据的峰值）（用于水力计算的分母）
     
-    Qr_chiller: float = 79.4808 # 冷机额定冷量 kW（默认与重标定后的选型一致；Station 会显式覆盖）
+    Qr_chiller: float = 2112.6 # 冷机实际额定冷量 kW（Station 会显式覆盖为 基准 × 放大系数）
+    # ===== 各设备输出尺度（D6：每台设备按各自的模型参考点归一）=====
+    # 三个模型的参考点互不相同：冷机 2112.6 kW、水泵 182.46 L/s、冷却塔 200 L/s。
+    # 用同一个尺度会让设备跑到模型训练域外（历史上冷却塔因此算出负功率）。
+    chiller_scale: float = 1.0   # 实际单机容量 ÷ 2112.6
+    pump_chw_scale: float = 1.0  # 冷冻泵设计流量 ÷ 182.46
+    pump_cw_scale: float = 1.0   # 冷却泵设计流量 ÷ 182.46
+    tower_scale: float = 1.0     # 冷却塔设计水流量 ÷ 200
     n_design: int = 3 # 冷机设计台数
     tr_cw_design: float = 30.0 # 冷却水回水温度设计值
     ts_cw_design: float = 35.0 # 冷却水出水温度设计值
@@ -57,10 +61,14 @@ class Channel:
         
         # 设备额定值一律由通道配置注入（单一口径：选型参数即模型额定值）。
         # 未注入的维度沿用模型的参考额定值，故默认参数下行为与改动前一致。
-        self.chiller = Chiller(Q_r=channel_info.Qr_chiller)
-        self.pump_chw = Pump(G_r=channel_info.Gr_chiller_chw, H_r=channel_info.Hr_pump_chw)
-        self.pump_cw = Pump(G_r=channel_info.Gr_chiller_cw, H_r=channel_info.Hr_pump_cw)
-        self.tower = Tower(Gw_r=channel_info.Gr_tower, P_r=channel_info.Pr_tower)
+        self.chiller = Chiller(Q_r=channel_info.Qr_chiller,
+                               output_scale=float(channel_info.chiller_scale or 1.0))
+        self.pump_chw = Pump(G_r=channel_info.Gr_chiller_chw, H_r=channel_info.Hr_pump_chw,
+                             output_scale=float(channel_info.pump_chw_scale or 1.0))
+        self.pump_cw = Pump(G_r=channel_info.Gr_chiller_cw, H_r=channel_info.Hr_pump_cw,
+                            output_scale=float(channel_info.pump_cw_scale or 1.0))
+        self.tower = Tower(Gw_r=channel_info.Gr_tower, P_r=channel_info.Pr_tower,
+                           output_scale=float(channel_info.tower_scale or 1.0))
         self.get_S_pipes_chw()
         self.get_S_pipes_cw()
         
@@ -151,7 +159,7 @@ class Channel:
     
     def  hydraulic_calculation_chw(self, Gw_chw_chiller):
         self.H_chw_chiller = self.channel_info.Hr_chiller_chw * (Gw_chw_chiller / self.channel_info.Gr_chiller_chw)**2.0
-        self.H_pt = self.channel_info.Hr_pt * (0.4 + 0.6 * self.Q_channel / (self.channel_info.load_building_r * self.channel_info.load_coe))
+        self.H_pt = self.channel_info.Hr_pt * (0.4 + 0.6 * self.Q_channel / self.channel_info.load_building_r)
         self.H_pump_chw = self.H_pt + self.H_chw_chiller + self.S_pipes_chw * self.Gw_chw**2.0
         return self.H_pump_chw
     
@@ -220,7 +228,7 @@ class Channel:
 
 if __name__ == '__main__':
     
-    load = 196572.0
+    load = 303067.16
     t_dry_W = 31.7
     da_W = 0.02347
     

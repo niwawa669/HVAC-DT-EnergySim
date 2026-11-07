@@ -17,11 +17,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src" / "apiserver" / "app" / "services"))
+sys.path.insert(0, str(ROOT / "src" / "algorithm"))
 
 import pandas as pd
 import algorithm_wrapper as aw
+from buildingload import data_file  # 数据目录集中定义在 buildingload.py
 
-CSV = ROOT / "src" / "algorithm" / "buildingload" / "buildingloads_adjusted.csv"
+CSV = Path(data_file("buildingloads_adjusted.csv"))
+AREA = 2_931_000.0   # 建筑空调面积 m²（口径 v2）
 
 
 def main() -> int:
@@ -33,9 +36,9 @@ def main() -> int:
         "applicable_range": {"t_dry_min": -20, "t_dry_max": 40, "d_min": 0, "d_max": 0.03},
     }
     meta_in = {"fileName": CSV.name, "totalRows": len(rows),
-               "projectName": "自检项目", "buildingType": "office", "area": 2931.0}
+               "projectName": "自检项目", "buildingType": "office", "area": AREA}
 
-    list(w.run_simulation_streaming(data=rows, config=cfg, area=2931.0, meta=meta_in))
+    list(w.run_simulation_streaming(data=rows, config=cfg, area=AREA, meta=meta_in))
 
     s = w._last_summary
     m = w._last_meta
@@ -48,9 +51,14 @@ def main() -> int:
     print(f"时间范围          : {m['startTime']} ~ {m['endTime']}")
     print(f"周数 / 月数       : {len(w._last_weekly_data)} / {len(w._last_monthly_data)}")
     si = w.station_info
-    installed = si.Qr_chiller_BCH * si.n_design_BCH + si.Qr_chiller_SCH * si.n_design_SCH
-    print(f"装机容量          : {installed:.2f} kW（设计负荷 {si.load_building_r * si.load_coe:.2f} kW 的 "
-          f"{installed / (si.load_building_r * si.load_coe):.3f} 倍）")
+    installed = m.get("installedCapacity") or 0
+    print(f"空调面积          : {m.get('area'):,.0f} m2")
+    print(f"冷机容量放大系数  : {m.get('capacityFactor')}")
+    print(f"总装机容量        : {installed:,.2f} kW")
+    print(f"建筑负荷最大值    : {m.get('peakLoad'):,.2f} kW")
+    print(f"设计裕度          : {m.get('designMargin'):.4f}"
+          "（合理区间 0.9 ~ 1.1）")
+    print(f"峰值强度          : {m.get('peakLoad') / m.get('area') * 1000:.1f} W/m2")
     print(f"建筑总冷负荷      : {s['totalCoolingLoad']:.2f} kWh")
     print(f"冷源站总供冷量    : {s['totalQStation']:.2f} kWh")
     print(f"冷源站总耗电量    : {s['totalEnergy']:.2f} kWh")

@@ -1,0 +1,168 @@
+{
+  "change": "persistence-framework",
+  "capturedAt": "2026-11-02T12:30:08.321Z",
+  "purpose": "改动前的内存态基线：用于确认哪些状态在旧实现里只存在于进程内，以及可直接被索引的历史报告清单",
+  "before": {
+    "storage": "进程内存（fake_users_db / fake_projects / SimulationService.tasks）+ 文件目录（data/reports）",
+    "users": [
+      {
+        "id": 1,
+        "username": "admin",
+        "role": "admin",
+        "email": "admin@example.com",
+        "passwordHash": "bcrypt（运行时生成，每次进程启动不同）"
+      },
+      {
+        "id": 2,
+        "username": "user",
+        "role": "engineer",
+        "email": "user@example.com",
+        "passwordHash": "bcrypt（运行时生成，每次进程启动不同）"
+      }
+    ],
+    "projects": [
+      {
+        "id": 1,
+        "name": "办公楼能耗仿真项目",
+        "buildingType": "office",
+        "area": 2931000,
+        "status": "completed"
+      },
+      {
+        "id": 2,
+        "name": "商业综合体能耗分析",
+        "buildingType": "commercial",
+        "area": 50000,
+        "status": "running"
+      },
+      {
+        "id": 3,
+        "name": "住宅小区暖通仿真",
+        "buildingType": "residential",
+        "area": 20000,
+        "status": "pending"
+      }
+    ],
+    "simulationTaskFields": [
+      "status",
+      "progress",
+      "current_week",
+      "total_weeks",
+      "started_at",
+      "updated_at",
+      "config",
+      "data",
+      "data_meta",
+      "project_name",
+      "building_type",
+      "area",
+      "user_id",
+      "result",
+      "error"
+    ],
+    "simulationResultBlocks": [
+      "meta",
+      "summary",
+      "weekly_data",
+      "monthly_data",
+      "unmet_hours_detail"
+    ],
+    "reportsOnDisk": [
+      {
+        "reportId": "017d578f-20261101193706",
+        "taskId": "017d578f-0d56-4423-8b97-17f09f2e6e44",
+        "ownerId": 1,
+        "generatedAt": "2026-11-01T19:37:06+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v2"
+      },
+      {
+        "reportId": "0eb06877-20261101172914",
+        "taskId": "0eb06877-bea9-4d24-9933-0109cb2e7e0d",
+        "ownerId": 1,
+        "generatedAt": "2026-11-01T17:29:14+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v2"
+      },
+      {
+        "reportId": "2dc59a27-20261101142838",
+        "taskId": "2dc59a27-9221-490a-bd5e-0a48303606ec",
+        "ownerId": 1,
+        "generatedAt": "2026-11-01T14:28:38+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v2"
+      },
+      {
+        "reportId": "30719e40-20261101170543",
+        "taskId": "30719e40-de78-4da3-bc4a-a1a956d0729d",
+        "ownerId": 1,
+        "generatedAt": "2026-11-01T17:05:43+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v2"
+      },
+      {
+        "reportId": "4b28b45d-20261101141107",
+        "taskId": "4b28b45d-c8e9-4687-8b9a-462cd5e208ed",
+        "ownerId": 1,
+        "generatedAt": "2026-11-01T14:11:07+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v2"
+      },
+      {
+        "reportId": "6ed2804c-20261101144621",
+        "taskId": "6ed2804c-a0c7-4c41-9ab3-a05602d92a43",
+        "ownerId": 1,
+        "generatedAt": "2026-11-01T14:46:21+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v2"
+      },
+      {
+        "reportId": "7b92f38f-20261031172851",
+        "taskId": "7b92f38f-6c27-477f-9f82-951c9376cc82",
+        "ownerId": 1,
+        "generatedAt": "2026-10-31T17:28:51+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v1"
+      },
+      {
+        "reportId": "8f6ccd26-20261101195600",
+        "taskId": "8f6ccd26-b9f8-4ddf-b2a4-29393f110c1a",
+        "ownerId": 1,
+        "generatedAt": "2026-11-01T19:56:00+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v2"
+      },
+      {
+        "reportId": "990a6d26-20261101193428",
+        "taskId": "990a6d26-7b13-4dcb-b123-8891f4c01ef5",
+        "ownerId": 1,
+        "generatedAt": "2026-11-01T19:34:28+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v2"
+      },
+      {
+        "reportId": "a727955a-20261101193542",
+        "taskId": "a727955a-bf83-4bea-9e49-76e02d14e30c",
+        "ownerId": 1,
+        "generatedAt": "2026-11-01T19:35:42+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v2"
+      },
+      {
+        "reportId": "b5b5a702-20261031161347",
+        "taskId": "b5b5a702-815f-445d-970c-d06070621cf1",
+        "ownerId": 1,
+        "generatedAt": "2026-10-31T16:13:47+08:00",
+        "reportVersion": "v1",
+        "caliberVersion": "v1"
+      }
+    ],
+    "reportCount": 11
+  },
+  "observableLossWithoutPersistence": [
+    "服务重启后 SimulationService.tasks 清空：任务状态、结果、重新仿真能力全部丢失",
+    "服务重启后 fake_projects 恢复为 3 条演示数据：用户新建项目丢失",
+    "输入逐时数据只存在任务字典中：进程结束即无法复现",
+    "algorithm_wrapper._last_* 全局字段：并行任务可能互相读到对方结果"
+  ]
+}

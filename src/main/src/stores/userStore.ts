@@ -5,7 +5,10 @@ interface User {
   id: number
   username: string
   role: string
-  email?: string
+  email?: string | null
+  isActive?: boolean
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
 interface AuthData {
@@ -39,6 +42,12 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('user', JSON.stringify(data.user))
   }
 
+  function updateUser(patch: Partial<User>) {
+    if (!user.value) return
+    user.value = { ...user.value, ...patch }
+    localStorage.setItem('user', JSON.stringify(user.value))
+  }
+
   function logout() {
     token.value = ''
     user.value = null
@@ -60,6 +69,7 @@ export const useUserStore = defineStore('user', () => {
     userName,
     userRole,
     setAuth,
+    updateUser,
     logout,
     getAuthHeader,
   }

@@ -1,12 +1,14 @@
 <template>
     <div class="dashboard">
+        <el-alert v-if="loadError" :title="loadError" type="error" show-icon :closable="false"
+            style="margin-bottom: 16px;" />
+
         <!-- 统计卡片 -->
         <el-row :gutter="20">
             <el-col :span="6" v-for="stat in stats" :key="stat.label">
                 <el-card shadow="hover" class="stat-card">
                     <div class="stat-content">
                         <div class="stat-icon" :style="{ backgroundColor: stat.bgColor }">
-                            <!-- 显式设置 size="28" -->
                             <el-icon :size="28" :color="stat.color">
                                 <component :is="stat.icon" />
                             </el-icon>
@@ -29,25 +31,16 @@
                     </template>
                     <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                         <el-button type="primary" @click="goToNewProject">
-                            <!-- 显式设置 size="16" -->
-                            <el-icon :size="16">
-                                <Plus />
-                            </el-icon> 新建项目
+                            <el-icon :size="16"><Plus /></el-icon> 新建项目
                         </el-button>
                         <el-button @click="goToProjects">
-                            <el-icon :size="16">
-                                <Folder />
-                            </el-icon> 项目列表
+                            <el-icon :size="16"><Folder /></el-icon> 项目列表
                         </el-button>
                         <el-button @click="goToSimulation">
-                            <el-icon :size="16">
-                                <VideoPlay />
-                            </el-icon> 仿真监控
+                            <el-icon :size="16"><VideoPlay /></el-icon> 仿真监控
                         </el-button>
                         <el-button @click="goToResults">
-                            <el-icon :size="16">
-                                <DataAnalysis />
-                            </el-icon> 查看结果
+                            <el-icon :size="16"><DataAnalysis /></el-icon> 查看结果
                         </el-button>
                     </div>
                 </el-card>
@@ -59,25 +52,40 @@
             <el-col :span="24">
                 <el-card shadow="hover">
                     <template #header>
-                        <span>最近项目</span>
+                        <div class="card-header">
+                            <span>最近项目</span>
+                            <el-button link type="primary" @click="goToProjects">全部项目</el-button>
+                        </div>
                     </template>
-                    <el-table :data="recentProjects" style="width: 100%">
-                        <el-table-column prop="name" label="项目名称" />
-                        <el-table-column prop="buildingType" label="建筑类型" width="120" />
-                        <el-table-column prop="status" label="状态" width="100">
+                    <el-table :data="recentProjects" v-loading="loading" style="width: 100%"
+                        empty-text="暂无项目：点击「新建项目」发起一次仿真，完成后会自动出现在这里">
+                        <el-table-column prop="name" label="项目名称" min-width="200" />
+                        <el-table-column label="建筑类型" width="120">
+                            <template #default="{ row }">{{ buildingTypeLabel(row.buildingType) }}</template>
+                        </el-table-column>
+                        <el-table-column label="状态" width="110">
                             <template #default="{ row }">
-                                <el-tag :type="getStatusType(row.status)" size="small">
-                                    {{ row.status }}
+                                <el-tag :type="projectStatusTagType(row.status)" size="small">
+                                    {{ projectStatusLabel(row.status) }}
                                 </el-tag>
                             </template>
                         </el-table-column>
-                        <el-table-column prop="createdAt" label="创建时间" width="180" />
-                        <el-table-column label="操作" width="200">
+                        <el-table-column label="最近仿真" width="150">
+                            <template #default="{ row }">
+                                <span v-if="row.latestTask">
+                                    {{ projectStatusLabel(row.latestTask.status) }} {{ row.latestTask.progress }}%
+                                </span>
+                                <span v-else>—</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="更新时间" width="170">
+                            <template #default="{ row }">{{ formatDateTime(row.updatedAt || row.createdAt) }}</template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="180">
                             <template #default="{ row }">
                                 <el-button size="small" @click="viewProject(row)">查看</el-button>
-                                <el-button v-if="row.status === '待处理'" type="primary" size="small"
-                                    @click="startSimulation(row)">
-                                    运行
+                                <el-button v-if="row.latestTask" size="small" type="primary" @click="openSimulation(row)">
+                                    仿真
                                 </el-button>
                             </template>
                         </el-table-column>
@@ -88,131 +96,110 @@
     </div>
 </template>
 
-<script>
-import { ref } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
     Plus, Folder, VideoPlay, DataAnalysis,
-    Document, Check, Timer, DataBoard
+    Document, Check, Timer, DataBoard,
 } from '@element-plus/icons-vue'
 
-export default {
-    name: 'Dashboard',
-    components: {
-        Plus,
-        Folder,
-        VideoPlay,
-        DataAnalysis,
-        Document,
-        Check,
-        Timer,
-        DataBoard
+import { getProjects, type Project } from '@/api/projects'
+import {
+    buildingTypeLabel,
+    formatDateTime,
+    projectStatusLabel,
+    projectStatusTagType,
+} from '@/utils/projectDisplay'
+
+const router = useRouter()
+const projects = ref<Project[]>([])
+const loading = ref(false)
+const loadError = ref('')
+
+const countByStatus = (statuses: string[]) =>
+    projects.value.filter((item) => statuses.includes(item.status)).length
+
+const stats = computed(() => [
+    {
+        label: '总项目数',
+        value: projects.value.length,
+        icon: Document,
+        color: '#409EFF',
+        bgColor: 'rgba(64, 158, 255, 0.1)',
     },
-    setup() {
-        const router = useRouter()
+    {
+        label: '已完成',
+        value: countByStatus(['completed']),
+        icon: Check,
+        color: '#67C23A',
+        bgColor: 'rgba(103, 194, 58, 0.1)',
+    },
+    {
+        label: '运行中',
+        value: countByStatus(['running']),
+        icon: Timer,
+        color: '#E6A23C',
+        bgColor: 'rgba(230, 162, 60, 0.1)',
+    },
+    {
+        label: '待处理',
+        value: countByStatus(['pending', 'draft']),
+        icon: DataBoard,
+        color: '#F56C6C',
+        bgColor: 'rgba(245, 108, 108, 0.1)',
+    },
+])
 
-        const stats = ref([
-            {
-                label: '总项目数',
-                value: 12,
-                icon: 'Document',
-                color: '#409EFF',
-                bgColor: 'rgba(64, 158, 255, 0.1)'
-            },
-            {
-                label: '已完成',
-                value: 5,
-                icon: 'Check',
-                color: '#67C23A',
-                bgColor: 'rgba(103, 194, 58, 0.1)'
-            },
-            {
-                label: '运行中',
-                value: 2,
-                icon: 'Timer',
-                color: '#E6A23C',
-                bgColor: 'rgba(230, 162, 60, 0.1)'
-            },
-            {
-                label: '待处理',
-                value: 5,
-                icon: 'DataBoard',
-                color: '#F56C6C',
-                bgColor: 'rgba(245, 108, 108, 0.1)'
-            }
-        ])
+const recentProjects = computed(() => projects.value.slice(0, 5))
 
-        const recentProjects = ref([
-            {
-                id: 1,
-                name: '办公楼能耗仿真项目',
-                buildingType: '办公',
-                status: '已完成',
-                createdAt: '2026-07-28 14:30'
-            },
-            {
-                id: 2,
-                name: '商业综合体能耗分析',
-                buildingType: '商业',
-                status: '运行中',
-                createdAt: '2026-07-29 09:15'
-            },
-            {
-                id: 3,
-                name: '住宅小区暖通仿真',
-                buildingType: '住宅',
-                status: '待处理',
-                createdAt: '2026-07-30 16:45'
-            }
-        ])
+const loadProjects = async () => {
+    loading.value = true
+    loadError.value = ''
+    try {
+        projects.value = await getProjects()
+    } catch (error: any) {
+        loadError.value =
+            error?.response?.data?.detail || '项目列表加载失败，请确认后端服务已启动'
+        console.error('加载项目列表失败:', error)
+    } finally {
+        loading.value = false
+    }
+}
 
-        const getStatusType = (status) => {
-            const map = {
-                '已完成': 'success',
-                '运行中': 'warning',
-                '待处理': 'info',
-                '失败': 'danger'
-            }
-            return map[status] || 'info'
-        }
+onMounted(loadProjects)
 
-        const goToNewProject = () => {
-            router.push('/project/new')
-        }
+const goToNewProject = () => router.push('/project/new')
+const goToProjects = () => router.push('/projects')
 
-        const goToProjects = () => {
-            router.push('/projects')
-        }
+const viewProject = (row: Project) =>
+    router.push({ path: '/projects', query: { id: String(row.id) } })
 
-        const goToSimulation = () => {
-            router.push('/simulation/mock-001')
-        }
+const openSimulation = (row: Project) => {
+    if (row.latestTask?.taskId) {
+        router.push(`/simulation/${row.latestTask.taskId}`)
+    }
+}
 
-        const goToResults = () => {
-            router.push('/results/1')
-        }
+const goToSimulation = () => {
+    const running = projects.value.find((item) => item.latestTask?.status === 'running')
+    const anyTask = running || projects.value.find((item) => item.latestTask)
+    if (anyTask?.latestTask?.taskId) {
+        router.push(`/simulation/${anyTask.latestTask.taskId}`)
+    } else {
+        ElMessage.info('暂无可查看的仿真任务，请先新建项目')
+    }
+}
 
-        const viewProject = (row) => {
-            ElMessage.info(`查看项目: ${row.name}`)
-        }
-
-        const startSimulation = (row) => {
-            ElMessage.success(`启动仿真: ${row.name}`)
-            router.push(`/simulation/mock-${row.id}`)
-        }
-
-        return {
-            stats,
-            recentProjects,
-            getStatusType,
-            goToNewProject,
-            goToProjects,
-            goToSimulation,
-            goToResults,
-            viewProject,
-            startSimulation
-        }
+const goToResults = () => {
+    const done = projects.value.find(
+        (item) => item.latestTask?.status === 'completed' && item.latestTask,
+    )
+    if (done?.latestTask?.taskId) {
+        router.push(`/simulation/${done.latestTask.taskId}`)
+    } else {
+        ElMessage.info('暂无已完成的结果')
     }
 }
 </script>
@@ -220,6 +207,12 @@ export default {
 <style scoped>
 .dashboard {
     padding: 0;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .stat-card {
@@ -247,7 +240,6 @@ export default {
     flex-shrink: 0;
 }
 
-/* 保险：强制覆盖图标大小 */
 .stat-icon .el-icon {
     font-size: 28px !important;
     width: 28px !important;
@@ -273,7 +265,6 @@ export default {
     line-height: 1.4;
 }
 
-/* 强制按钮中的图标大小 */
 :deep(.el-button .el-icon) {
     font-size: 16px !important;
     width: 16px !important;

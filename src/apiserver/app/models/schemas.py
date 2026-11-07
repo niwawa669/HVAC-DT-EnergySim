@@ -1,5 +1,5 @@
-from pydantic import BaseModel, ConfigDict, Field
-from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing import List, Dict, Any, Optional, Literal
 from datetime import datetime
 from enum import Enum
 
@@ -21,44 +21,36 @@ class BuildingType(str, Enum):
 # ===== 设备选型参数 =====
 class EquipmentConfig(BaseModel):
     # 建筑负荷
-    load_building_r: float = 196572.0   # 数据原始单位（W），见 docs/data-contract.md
-    load_coe: float = 0.001             # 量纲换算 W -> kW（口径 v1，D8）
+    load_building_r: float = 303067.16  # 建筑设计峰值负荷 kW（缺省取示例数据峰值）
+    capacity_factor: float = Field(default=20.0, gt=0)  # 冷机容量放大系数（D4）：实际单机容量 = 基准容量 × 该系数
     
     # 冷机参数
-    Qr_chiller_BCH: float = 79.4808     # ÷26.58 重标定（D8/6.6）
-    n_design_BCH: int = 3
-    COP_chiller_BCH: float = 5.5        # 仅展示：标称值 vs 模型值校核
-    Qr_chiller_SCH: float = 39.7404     # ÷26.58 重标定
+    Qr_chiller_BCH: float = 2112.6      # 基准额定冷量 kW（= 模型参考容量）
+    n_design_BCH: int = 7
+    Qr_chiller_SCH: float = 1056.3      # 基准额定冷量 kW（大机的一半）
     n_design_SCH: int = 1
-    COP_chiller_SCH: float = 5.0        # 仅展示
     ts_chw_design: float = 7.0
     tr_chw_design: float = 12.0
     tr_cw_design: float = 30.0
     ts_cw_design: float = 35.0
     
     # 冷冻泵参数
-    Gr_pump_chw_BCH: float = 3.7961     # ÷26.58 重标定
     Hr_pump_chw_BCH: float = 32.0       # 水力阻力参数，不随容量缩放
-    n_pump_chw_BCH: int = 3
-    Gr_pump_chw_SCH: float = 1.9007
+    n_pump_chw_BCH: int = 7
     Hr_pump_chw_SCH: float = 32.0
     n_pump_chw_SCH: int = 1
     
     # 冷却泵参数
-    Gr_pump_cw_BCH: float = 4.7442
     Hr_pump_cw_BCH: float = 30.0
-    n_pump_cw_BCH: int = 3
-    Gr_pump_cw_SCH: float = 2.4078
+    n_pump_cw_BCH: int = 7
     Hr_pump_cw_SCH: float = 30.0
     n_pump_cw_SCH: int = 1
     
     # 冷却塔参数
-    Gr_tower_BCH: float = 7.5245
-    Pr_tower_BCH: float = 0.8277        # 仅展示：标称值 vs 模型值校核
+    Pr_tower_BCH: float = 440.0         # 塔设计功率 kW（用户输入，按设计点归一参与计算）
     Hs_tower_BCH: float = 4.0
-    n_tower_BCH: int = 3
-    Gr_tower_SCH: float = 3.7622
-    Pr_tower_SCH: float = 0.4515        # 仅展示
+    n_tower_BCH: int = 7
+    Pr_tower_SCH: float = 240.0         # 塔设计功率 kW（用户输入）
     Hs_tower_SCH: float = 3.8
     n_tower_SCH: int = 1
     
@@ -84,9 +76,9 @@ class ControlConfig(BaseModel):
     load_up: float = 0.9
     load_min: float = 0.3
     
-    # 冷机加机优先级（随装机重标定，须与 Qr_chiller_* 同口径）
-    Qr_list: List[float] = [39.7404, 79.4808]
-    n_design_list: List[int] = [1, 3]
+    # 冷机加机优先级（须与 Qr_chiller_* / n_design_* 同口径）
+    Qr_list: List[float] = [1056.3, 2112.6]
+    n_design_list: Optional[List[int]] = None
     
     # 频率控制
     freq_pump_max: float = 50.0
@@ -106,17 +98,83 @@ class SimulationConfig(EquipmentConfig, ControlConfig):
     # 拒绝未映射参数（D7/6.5）：宁可在启动前报错，也不静默丢弃
     model_config = ConfigDict(extra='forbid')
 
+    @model_validator(mode='after')
+    def _check_staging_list(self):
+        """加机优先级序列必须与实际台数一致（参数生效原则）。
+
+        允许省略：省略时由台数推导，见 algorithm_wrapper。显式给出且与台数不符时拒绝，
+        否则群控会按序列里的台数投运——比实际台数少，且界面上看不出任何异常。
+        """
+        provided = self.n_design_list
+        if provided is None:
+            return self
+        expected = [self.n_design_SCH, self.n_design_BCH]
+        if list(provided) != expected:
+            raise ValueError(
+                f"加机优先级序列 n_design_list={list(provided)} 与冷机台数 "
+                f"[n_design_SCH, n_design_BCH]={expected} 不一致；"
+                f"两者不一致会导致群控按错误台数投运。"
+            )
+        return self
+
 # ===== 请求模型 =====
 class StartSimulationRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     projectName: str = Field(min_length=1, max_length=100)
     buildingType: BuildingType
-    area: float = Field(gt=0, le=1000000)
+    area: float = Field(gt=0, le=10000000)  # 上限 1000 万 m²，覆盖区域级项目
     config: SimulationConfig
     data: Dict[str, Any]
     # 数据溯源与参数快照（4.3/6.5）：前端上传时可携带，缺失则用计算结果兜底
     dataMeta: Optional[Dict[str, Any]] = None
+    # 可选关联项目（D14）：不传时为未关联，结果里的 projectId 返回 0
+    projectId: Optional[int] = Field(default=None, ge=1)
+
+class ProjectCreate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    name: str = Field(min_length=1, max_length=128)
+    buildingType: Optional[str] = Field(default=None, max_length=32)
+    area: Optional[float] = Field(default=None, gt=0)
+    status: Optional[str] = Field(default=None, max_length=32)
+
+
+class UserCreate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    username: str = Field(min_length=3, max_length=64, pattern=r'^[A-Za-z0-9_.-]+$')
+    password: str = Field(min_length=6, max_length=72)
+    email: Optional[str] = Field(default=None, max_length=255)
+    role: Literal['admin', 'engineer'] = 'engineer'
+
+
+class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    email: Optional[str] = Field(default=None, max_length=255)
+    role: Optional[Literal['admin', 'engineer']] = None
+    isActive: Optional[bool] = None
+
+
+class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    email: Optional[str] = Field(default=None, max_length=255)
+
+
+class PasswordChange(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    currentPassword: str = Field(min_length=1)
+    newPassword: str = Field(min_length=6, max_length=72)
+
+
+class PasswordReset(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    newPassword: str = Field(min_length=6, max_length=72)
+
 
 class LoginRequest(BaseModel):
     username: str
@@ -152,6 +210,7 @@ class SimulationSummary(BaseModel):
     peakCoolingLoad: float = 0         # kW
     eui: float = 0                     # kWh/m²·yr
     avgCop: float = 0                  # 冷机平均 COP
+    avgChillerLoadRate: float = 0      # 全年冷机平均负荷率（%）= 总供冷量 ÷ Σ在线冷机容量
     systemEER: float = 0               # 冷源站综合能效（与冷机 COP 分离）
     totalUnmet: float = 0              # 供冷缺口（超出装机的部分）
     unmetHours: int = 0
@@ -218,8 +277,12 @@ class SimulationMeta(BaseModel):
     projectName: Optional[str] = None
     buildingType: Optional[str] = None
     area: float = 0
-    caliberVersion: str = 'v1'
-    loadCoe: Optional[float] = None
+    caliberVersion: str = 'v2'
+    # ===== 选型尺度（D3/D4）=====
+    capacityFactor: Optional[float] = None   # 冷机容量放大系数
+    peakLoad: Optional[float] = None         # 建筑负荷最大值 kW
+    installedCapacity: Optional[float] = None  # 总装机容量 kW
+    designMargin: Optional[float] = None     # 设计裕度 = 总装机 ÷ 峰值负荷
     carbonFactor: Dict[str, Any] = Field(default_factory=dict)
     applicableRange: Dict[str, Any] = Field(default_factory=dict)
     applicableRangeSource: Optional[str] = None

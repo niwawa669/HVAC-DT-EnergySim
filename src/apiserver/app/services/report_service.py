@@ -119,7 +119,7 @@ FIELD_SOURCES: Dict[str, List[Tuple[str, str, str, str]]] = {
         ("correctedOutliers", "meta.correctedOutliers", "修正异常值", "个"),
         ("tDryRange", "meta.tDryMin", "干球温度范围", "℃"),
         ("humidRange", "meta.humidMin", "含湿量范围", "kg/kg"),
-        ("loadCoe", "meta.loadCoe", "量纲换算系数", ""),
+        ("capacityFactor", "meta.capacityFactor", "冷机容量放大系数", ""),
         ("caliberVersion", "meta.caliberVersion", "口径版本", ""),
     ],
     "4": [
@@ -146,6 +146,92 @@ REQUIRED_FIELDS: List[Tuple[str, str]] = [
 
 _BREAKDOWN_KEYS = ("chiller", "pump_chw", "pump_cw", "tower")
 _BREAKDOWN_LABELS = {"chiller": "冷机", "pump_chw": "冷冻泵", "pump_cw": "冷却泵", "tower": "冷却塔"}
+
+
+# ===== 参数中文标签（第 3 章展示用，键名保持可追溯）=====
+# 报告要求「使用简体中文表述、每个指标附带明确单位」；参数快照仍以原始键名保存，
+# 这里只负责展示名。新增参数时必须同步本表，否则第 3 章会退化显示英文键（测试会报出）。
+PARAM_LABELS: Dict[str, Tuple[str, str]] = {
+    # 建筑与尺度
+    "load_building_r": ("建筑设计峰值负荷", "kW"),
+    "capacity_factor": ("冷机容量放大系数", ""),
+    # 冷机
+    "Qr_chiller_BCH": ("大机额定制冷量", "kW"),
+    "n_design_BCH": ("大机台数", "台"),
+    "COP_chiller_BCH": ("大机 COP（标称）", ""),
+    "Qr_chiller_SCH": ("小机额定制冷量", "kW"),
+    "n_design_SCH": ("小机台数", "台"),
+    "COP_chiller_SCH": ("小机 COP（标称）", ""),
+    "ts_chw_design": ("冷冻水供水温度设计值", "℃"),
+    "tr_chw_design": ("冷冻水回水温度设计值", "℃"),
+    "tr_cw_design": ("冷却水回水温度设计值", "℃"),
+    "ts_cw_design": ("冷却水供水温度设计值", "℃"),
+    # 冷冻泵
+    "Gr_pump_chw_BCH": ("大机冷冻泵设计流量", "L/s"),
+    "Hr_pump_chw_BCH": ("大机冷冻泵设计扬程", "mH₂O"),
+    "n_pump_chw_BCH": ("大机冷冻泵台数", "台"),
+    "Gr_pump_chw_SCH": ("小机冷冻泵设计流量", "L/s"),
+    "Hr_pump_chw_SCH": ("小机冷冻泵设计扬程", "mH₂O"),
+    "n_pump_chw_SCH": ("小机冷冻泵台数", "台"),
+    # 冷却泵
+    "Gr_pump_cw_BCH": ("大机冷却泵设计流量", "L/s"),
+    "Hr_pump_cw_BCH": ("大机冷却泵设计扬程", "mH₂O"),
+    "n_pump_cw_BCH": ("大机冷却泵台数", "台"),
+    "Gr_pump_cw_SCH": ("小机冷却泵设计流量", "L/s"),
+    "Hr_pump_cw_SCH": ("小机冷却泵设计扬程", "mH₂O"),
+    "n_pump_cw_SCH": ("小机冷却泵台数", "台"),
+    # 冷却塔
+    "Gr_tower_BCH": ("大机冷却塔设计流量", "L/s"),
+    "Pr_tower_BCH": ("大机冷却塔设计功率（标称）", "kW"),
+    "Hs_tower_BCH": ("大机冷却塔设计压降", "mH₂O"),
+    "n_tower_BCH": ("大机冷却塔台数", "台"),
+    "Gr_tower_SCH": ("小机冷却塔设计流量", "L/s"),
+    "Pr_tower_SCH": ("小机冷却塔设计功率（标称）", "kW"),
+    "Hs_tower_SCH": ("小机冷却塔设计压降", "mH₂O"),
+    "n_tower_SCH": ("小机冷却塔台数", "台"),
+    # 管道压降
+    "Hr_pt": ("冷冻供回水总管扬程", "mH₂O"),
+    "Hr_chiller_chw_BCH": ("大机冷机冷冻水侧设计压降", "mH₂O"),
+    "Hr_chiller_cw_BCH": ("大机冷机冷却水侧设计压降", "mH₂O"),
+    "Hr_chiller_chw_SCH": ("小机冷机冷冻水侧设计压降", "mH₂O"),
+    "Hr_chiller_cw_SCH": ("小机冷机冷却水侧设计压降", "mH₂O"),
+    # 群控与设计工况
+    "ta_dry_r": ("室外干球温度设计值", "℃"),
+    "ta_wet_r": ("室外湿球温度设计值", "℃"),
+    "ts_chw_set": ("冷冻水供水温度设定值", "℃"),
+    "delta_t_chw": ("冷冻水供回水温差", "℃"),
+    "delta_t_cw": ("冷却水供回水温差", "℃"),
+    "tr_cw_min": ("冷却水回水温度最小值", "℃"),
+    "approach_set": ("冷却塔逼近度", "℃"),
+    "load_up": ("加机负荷率", ""),
+    "load_min": ("冷机最小负荷率", ""),
+    "freq_pump_max": ("水泵最高频率", "Hz"),
+    "freq_pump_min": ("水泵最低频率", "Hz"),
+    "freq_tower_max": ("冷却塔风机最高频率", "Hz"),
+    "freq_tower_min": ("冷却塔风机最低频率", "Hz"),
+    # 序列与口径
+    "Qr_list": ("加机优先级（额定冷量序列）", "kW"),
+    "n_design_list": ("加机优先级（台数序列）", "台"),
+    "carbon_year": ("碳排因子核算年度", ""),
+    "carbon_province": ("碳排因子适用省份", ""),
+    "applicable_range": ("模型适用范围", ""),
+}
+
+
+def _fmt_sequence(name: str, value: Any) -> Optional[str]:
+    """序列类参数的可读呈现（D5）：不出现裸数组。"""
+    if not isinstance(value, list) or not value:
+        return None
+    if name == 'Qr_list' and len(value) >= 2:
+        return f"小机 {fmt_display(value[0])} kW → 大机 {fmt_display(value[1])} kW"
+    if name == 'n_design_list':
+        return " → ".join(f"{int(v)} 台" for v in value)
+    return " → ".join(fmt_display(v) for v in value)
+
+
+def param_label(name: str) -> Tuple[str, str]:
+    """返回参数的（中文名, 单位）；未登记时回退为键名本身。"""
+    return PARAM_LABELS.get(name, (name, ""))
 
 
 def resolve(source: Dict[str, Any], path: str) -> Any:
@@ -230,6 +316,13 @@ def _chapter_results(result: Dict[str, Any]) -> Dict[str, Any]:
         "parameters": dict(snapshot),
         "displayOnly": list(resolve(result, "meta.displayOnly") or []),
         "deviations": resolve(result, "meta.displayOnlyDeviations") or {},
+        # 选型尺度（D3/D4）：派生只读，报告需如实回显
+        "caliber": {
+            "designMargin": resolve(result, "meta.designMargin"),
+            "capacityFactor": resolve(result, "meta.capacityFactor"),
+            "installedCapacity": resolve(result, "meta.installedCapacity"),
+            "peakLoad": resolve(result, "meta.peakLoad"),
+        },
     }
 
     chapters["4"] = {
@@ -266,7 +359,7 @@ def _chapter_results(result: Dict[str, Any]) -> Dict[str, Any]:
         "applicableRange": resolve(result, "meta.applicableRange") or {},
         "caliber": {
             "version": resolve(result, "meta.caliberVersion"),
-            "loadCoe": resolve(result, "meta.loadCoe"),
+            "capacityFactor": resolve(result, "meta.capacityFactor"),
         },
     }
     return chapters
@@ -484,8 +577,10 @@ import os
 import shutil
 from datetime import datetime, timedelta, timezone
 
-_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-REPORTS_DIR = os.environ.get("HVAC_REPORTS_DIR") or os.path.join(_ROOT, "data", "reports")
+from app.config import settings
+
+# 报告目录由配置决定（D10）；兼容 HVAC_REPORTS_DIR 环境变量（见 settings.reports_dir）
+REPORTS_DIR = str(settings.reports_dir)
 
 _CSS = """
 @page { size: A4; margin: 16mm 14mm; }
@@ -595,11 +690,27 @@ def render_html(view: Dict[str, Any], result: Dict[str, Any]) -> str:
         dev = deviations.get(name) or {}
         dev_txt = (f'{fmt_display(dev.get("nominal"))} → {fmt_display(dev.get("model"))}'
                    if dev else "—")
-        rows.append([name, value, role, dev_txt])
+        label, unit = param_label(name)
+        # 序列类参数改为可读形式，避免报告里出现裸数组
+        shown = _fmt_sequence(name, value) or fmt_display(value)
+        rows.append([label, shown, unit, role, dev_txt])
+    cal3 = c3.get("caliber") or {}
+    scale_rows = [
+        ["设计裕度", cal3.get("designMargin"),
+         "总装机 ÷ 建筑负荷最大值（派生只读）"],
+        ["冷机容量放大系数", cal3.get("capacityFactor"),
+         "2112.6 × 该系数 = 实际单机容量（派生只读）"],
+        ["总装机容量(kW)", cal3.get("installedCapacity"), "各机型实际容量 × 台数之和"],
+        ["建筑负荷最大值(kW)", cal3.get("peakLoad"), "取自本次输入数据"],
+    ]
     ch3 = _chapter("3", c3.get("title", "设备选型与群控参数"),
-                   _table(["参数", "取值", "作用", "标称 → 模型"], rows, numeric_from=1)
+                   _table(["参数", "取值", "单位", "作用", "标称 → 模型"], rows, numeric_from=1)
                    + ('<div class="note">标注为「仅展示」的参数不参与能耗计算，仅用于选型对照与标称值校核。</div>'
-                      if display_only else ""))
+                      if display_only else "")
+                   + "<h3>选型尺度（派生只读）</h3>"
+                   + _table(["项", "取值", "说明"], scale_rows, numeric_from=1)
+                   + '<div class="note">设计裕度 = 所有冷机实际额定制冷量之和 ÷ 建筑负荷最大值，'
+                     '合理区间 0.9 ~ 1.1；该值由系统计算，不接受手工录入。</div>')
 
     bd = c4.get("breakdown") or {}
     bd_total = sum(_num(bd.get(k)) for k in _BREAKDOWN_KEYS)
@@ -665,7 +776,7 @@ def render_html(view: Dict[str, Any], result: Dict[str, Any]) -> str:
                    + "<h3>口径说明</h3>"
                    + _table(["项", "取值"],
                             [["口径版本", (c7.get("caliber") or {}).get("version")],
-                             ["量纲换算系数", (c7.get("caliber") or {}).get("loadCoe")],
+                             ["冷机容量放大系数", (c7.get("caliber") or {}).get("capacityFactor")],
                              ["碳排放因子(kgCO2/kWh)", carbon.get("value")],
                              ["因子地理层级", label_carbon_level(carbon.get("level"))],
                              ["因子核算年度", carbon.get("year")],

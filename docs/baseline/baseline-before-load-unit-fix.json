@@ -1,0 +1,31 @@
+{
+ "purpose": "load-unit-and-design-margin 改动前的基线（口径 v1）",
+ "captured_at": "2026-11-01T09:59:35",
+ "caliberVersion": "v1",
+ "loadCoe": 0.001,
+ "area": 2931.0,
+ "installed_capacity_kW": 278.1828,
+ "peak_load_raw": 303067.16,
+ "peak_load_as_computed": 303.0672,
+ "design_margin_v1": 0.9179,
+ "summary": {
+  "totalEnergy": 26244.1441999574,
+  "totalQStation": 145431.48840999964,
+  "totalCoolingLoad": 149646.1202799999,
+  "peakCoolingLoad": 303.06716,
+  "eui": 8.953989832807029,
+  "avgCop": 8.556330233305097,
+  "systemEER": 5.541483361085773,
+  "carbonEmission": 14575.997688656342,
+  "totalUnmet": 58.329799999999864,
+  "unmetHours": 3
+ },
+ "hours": 8760,
+ "breakdown": {
+  "chiller": 18098.808520779196,
+  "pump_chw": 4255.8700100027745,
+  "pump_cw": 1812.5182791568172,
+  "tower": 2076.9473900186144
+ },
+ "note": "v1 把负荷按 W 处理（×0.001），并把装机 ÷26.58 缩到 278.18 kW；本次改动将推翻这两点。"
+}

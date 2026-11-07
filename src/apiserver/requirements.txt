@@ -9,6 +9,8 @@ passlib[bcrypt]==1.7.4
 python-dotenv==1.0.1
 
 # ===== 数据库 =====
+# 默认 SQLite（aiosqlite），零依赖开箱可用；
+# 切 MySQL 时安装驱动：pip install aiomysql，并设置 DATABASE_URL=mysql://user:pass@host/db
 sqlalchemy==2.0.34
 aiosqlite==0.20.0
 

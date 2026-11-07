@@ -1,6 +1,12 @@
 # 报告快照产物（由 report_service 生成，不入库）
 data/reports/
 
+# 持久化数据库与输入数据（运行时生成，不入库）
+data/hvac.db
+data/hvac.db-wal
+data/hvac.db-shm
+data/datasets/
+
 # Python
 __pycache__/
 *.pyc

@@ -3,6 +3,18 @@ import pandas as pd
 from datetime import datetime
 from typing import Union
 
+# ===== 数据目录（集中一处）=====
+# 负荷数据当前位于前端的 src/main/buildingload/ 目录（历史原因，非理想位置）。
+# 这里统一解析路径，将来迁移只需改这一处。
+BUILDINGLOAD_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', 'main', 'buildingload')
+)
+
+
+def data_file(name: str = 'buildingloads_adjusted.csv') -> str:
+    """返回负荷数据文件的绝对路径。"""
+    return os.path.join(BUILDINGLOAD_DIR, name)
+
 class CsvToDataframe:
     """
     从CSV文件中按时间范围筛选数据的类
@@ -69,8 +81,7 @@ class CsvToDataframe:
 
 # 使用示例
 if __name__ == "__main__":
-    file_path = 'buildingloads_adjusted.csv'
-    file_path = os.path.join(os.path.dirname(__file__), 'buildingload', file_path)
+    file_path = data_file('buildingloads_adjusted.csv')
     
     # 使用CSVTimeFilter类
     csv_filter = CsvToDataframe(file_path, 'datetime', '%Y/%m/%d %H:%M')

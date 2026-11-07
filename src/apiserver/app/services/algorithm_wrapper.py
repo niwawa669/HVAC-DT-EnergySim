@@ -6,7 +6,7 @@ import os
 import json
 import math
 import random
-from typing import Dict, Any, List, Optional, Iterator
+from typing import Dict, Any, List, Optional, Iterator, Tuple
 import pandas as pd
 
 # ===== 添加算法路径 =====
@@ -55,21 +55,21 @@ class AlgorithmWrapper:
     # 允许出现在 config 中的参数（D7/6.5）：不在此列表中的参数必须在启动前报错，
     # 而不是被静默丢弃。新增参数时请同步维护本集合。
     KNOWN_PARAMS = {
-        # 建筑负荷与量纲
-        'load_building_r', 'load_coe',
+        # 建筑负荷与尺度
+        'load_building_r', 'capacity_factor',
         # 冷机
-        'Qr_chiller_BCH', 'n_design_BCH', 'COP_chiller_BCH',
-        'Qr_chiller_SCH', 'n_design_SCH', 'COP_chiller_SCH',
+        'Qr_chiller_BCH', 'n_design_BCH',
+        'Qr_chiller_SCH', 'n_design_SCH',
         'ts_chw_design', 'tr_chw_design', 'tr_cw_design', 'ts_cw_design',
         # 冷冻泵
-        'Gr_pump_chw_BCH', 'Hr_pump_chw_BCH', 'n_pump_chw_BCH',
-        'Gr_pump_chw_SCH', 'Hr_pump_chw_SCH', 'n_pump_chw_SCH',
+        'Hr_pump_chw_BCH', 'n_pump_chw_BCH',
+        'Hr_pump_chw_SCH', 'n_pump_chw_SCH',
         # 冷却泵
-        'Gr_pump_cw_BCH', 'Hr_pump_cw_BCH', 'n_pump_cw_BCH',
-        'Gr_pump_cw_SCH', 'Hr_pump_cw_SCH', 'n_pump_cw_SCH',
+        'Hr_pump_cw_BCH', 'n_pump_cw_BCH',
+        'Hr_pump_cw_SCH', 'n_pump_cw_SCH',
         # 冷却塔
-        'Gr_tower_BCH', 'Pr_tower_BCH', 'Hs_tower_BCH', 'n_tower_BCH',
-        'Gr_tower_SCH', 'Pr_tower_SCH', 'Hs_tower_SCH', 'n_tower_SCH',
+        'Pr_tower_BCH', 'Hs_tower_BCH', 'n_tower_BCH',
+        'Pr_tower_SCH', 'Hs_tower_SCH', 'n_tower_SCH',
         # 管道压降
         'Hr_pt', 'Hr_chiller_chw_BCH', 'Hr_chiller_cw_BCH',
         'Hr_chiller_chw_SCH', 'Hr_chiller_cw_SCH',
@@ -97,6 +97,7 @@ class AlgorithmWrapper:
         
         try:
             self.station_info = StationInfo()
+            self._apply_derived_design()
             self.station = Station(self.station_info)  # type: ignore
             print("✅ 冷站仿真算法初始化完成")
         except Exception as e:
@@ -137,9 +138,9 @@ class AlgorithmWrapper:
             # 建筑负荷
             if 'load_building_r' in config:
                 self.station_info.load_building_r = config['load_building_r']
-            if 'load_coe' in config:
-                # 量纲换算系数：单一来源，默认 0.001（W->kW，口径 v1）
-                self.station_info.load_coe = float(config['load_coe'])
+            if 'capacity_factor' in config:
+                # 冷机容量放大系数（D4）：实际单机容量 = 基准容量 × 该系数
+                self.station_info.capacity_factor = float(config['capacity_factor'])
             
             # 冷机参数
             if 'Qr_chiller_BCH' in config:
@@ -173,35 +174,27 @@ class AlgorithmWrapper:
                 if key in config and config[key] is not None:
                     setattr(self.station_info, attr, int(config[key]))
 
-            # 冷冻泵参数
-            if 'Gr_pump_chw_BCH' in config:
-                self.station_info.Gr_pump_chw_BCH = config['Gr_pump_chw_BCH']
+            # 设计工况温度：界面上的供水温度与温差即算法使用的设定值
+            if 'ts_chw_design' in config and config['ts_chw_design'] is not None:
+                self.station_info.ts_chw_set = float(config['ts_chw_design'])
+
+            # 冷冻泵参数（设计流量为派生值，仅接受水力阻力参数）
             if 'Hr_pump_chw_BCH' in config:
                 self.station_info.Hr_pump_chw_BCH = config['Hr_pump_chw_BCH']
-            if 'Gr_pump_chw_SCH' in config:
-                self.station_info.Gr_pump_chw_SCH = config['Gr_pump_chw_SCH']
             if 'Hr_pump_chw_SCH' in config:
                 self.station_info.Hr_pump_chw_SCH = config['Hr_pump_chw_SCH']
-            
+
             # 冷却泵参数
-            if 'Gr_pump_cw_BCH' in config:
-                self.station_info.Gr_pump_cw_BCH = config['Gr_pump_cw_BCH']
             if 'Hr_pump_cw_BCH' in config:
                 self.station_info.Hr_pump_cw_BCH = config['Hr_pump_cw_BCH']
-            if 'Gr_pump_cw_SCH' in config:
-                self.station_info.Gr_pump_cw_SCH = config['Gr_pump_cw_SCH']
             if 'Hr_pump_cw_SCH' in config:
                 self.station_info.Hr_pump_cw_SCH = config['Hr_pump_cw_SCH']
-            
-            # 冷却塔参数
-            if 'Gr_tower_BCH' in config:
-                self.station_info.Gr_tower_BCH = config['Gr_tower_BCH']
+
+            # 冷却塔参数（水流量派生自冷却泵；设计功率为用户输入）
             if 'Pr_tower_BCH' in config:
                 self.station_info.Pr_tower_BCH = config['Pr_tower_BCH']
             if 'Hs_tower_BCH' in config:
                 self.station_info.Hs_tower_BCH = config['Hs_tower_BCH']
-            if 'Gr_tower_SCH' in config:
-                self.station_info.Gr_tower_SCH = config['Gr_tower_SCH']
             if 'Pr_tower_SCH' in config:
                 self.station_info.Pr_tower_SCH = config['Pr_tower_SCH']
             if 'Hs_tower_SCH' in config:
@@ -245,8 +238,15 @@ class AlgorithmWrapper:
             # 冷机加机优先级
             if 'Qr_list' in config and isinstance(config['Qr_list'], list):
                 self.station_info.Qr_list = config['Qr_list']
-            if 'n_design_list' in config and isinstance(config['n_design_list'], list):
-                self.station_info.n_design_list = config['n_design_list']
+            # 加机优先级序列未显式给出时，按实际台数推导，避免序列与台数脱节
+            # （脱节会让群控按错误台数投运，且界面上看不出异常）
+            _nlist = config.get('n_design_list')
+            if isinstance(_nlist, list) and _nlist:
+                self.station_info.n_design_list = list(_nlist)
+            else:
+                self.station_info.n_design_list = [
+                    self.station_info.n_design_SCH, self.station_info.n_design_BCH
+                ]
             
             # 频率控制
             if 'freq_pump_max' in config and 'freq_pump_min' in config:
@@ -255,6 +255,8 @@ class AlgorithmWrapper:
                 self.station_info.ratio_Hz_min_tower = config['freq_tower_min'] / config['freq_tower_max']
             
             # ===== 重新创建 Station 实例 =====
+            # 设计工况派生量必须在 Station 构造之前注入，否则通道会拿到旧流量
+            self._apply_derived_design()
             self.station = Station(self.station_info)  # type: ignore
             
             return True
@@ -294,6 +296,116 @@ class AlgorithmWrapper:
         src = (cfg.get('sources') or {}).get(year, {})
         source_text = f"{src.get('title', '')}（{src.get('issuer', '')}，{src.get('published', '')}）"
         return float(value), level, year, source_text, fallback
+
+    # 水的比热容 kJ/(kg·℃)，密度按 1 kg/L 计
+    WATER_CP = 4.187
+    # 模型参考冷机容量 kW
+    MODEL_QR_REF = 2112.6
+
+    # 设计工况派生量（D1）：由后端唯一计算，前端只展示
+    DERIVED_PARAM_KEYS = {
+        'COP_chiller_BCH', 'COP_chiller_SCH',
+        'Gr_pump_chw_BCH', 'Gr_pump_chw_SCH',
+        'Gr_pump_cw_BCH', 'Gr_pump_cw_SCH',
+        'Gr_tower_BCH', 'Gr_tower_SCH',
+    }
+
+    def _design_cop(self, q_actual: float, tr_chw: float, ts_chw: float,
+                    tr_cw: float, ts_cw: float) -> Optional[float]:
+        """冷机模型在设计工况（满负荷）下的 COP。"""
+        if not ALGORITHM_AVAILABLE or q_actual is None or q_actual <= 0:
+            return None
+        try:
+            from chiller_model import Chiller
+            scale = q_actual / self.MODEL_QR_REF
+            chiller = Chiller(Q_r=q_actual, output_scale=scale)
+            p = float(chiller(1.0, tr_chw, ts_chw, tr_cw, ts_cw))
+            return (q_actual / p) if p > 0 else None
+        except Exception as exc:  # pragma: no cover - 模型不可用时降级
+            print(f"⚠️ 设计工况 COP 计算失败: {exc}")
+            return None
+
+    def _derive_flows(self, q_actual: float, cop: Optional[float],
+                      dt_chw: float, dt_cw: float) -> Tuple[Optional[float], Optional[float]]:
+        """由制冷量与 COP 推导冷冻/却却水设计流量 L/s（D1）。"""
+        chw = cw = None
+        if q_actual and dt_chw:
+            chw = q_actual / (self.WATER_CP * dt_chw)
+        if q_actual and dt_cw:
+            heat = q_actual * (1.0 + 1.0 / cop) if cop else q_actual
+            cw = heat / (self.WATER_CP * dt_cw)
+        return chw, cw
+
+    def _apply_derived_design(self) -> Dict[str, Any]:
+        """计算并注入设计工况派生量，返回派生结果（供 meta 使用）。"""
+        si = self.station_info
+        if si is None:
+            return {}
+        cf = float(getattr(si, 'capacity_factor', 1.0) or 1.0)
+        q_bch = si.Qr_chiller_BCH * cf
+        q_sch = si.Qr_chiller_SCH * cf
+        # 设计工况温度：冷冻水 = 供水设定值 / 供水 + 温差；冷却水取各通道设计值
+        ts_chw = float(getattr(si, 'ts_chw_set', 7.0))
+        tr_chw = ts_chw + float(getattr(si, 'delta_t_chw', 5.0))
+        cop_bch = self._design_cop(q_bch, tr_chw, ts_chw,
+                                   float(getattr(si, 'tr_cw_design_BCH', 30.0)),
+                                   float(getattr(si, 'ts_cw_design_BCH', 35.0)))
+        cop_sch = self._design_cop(q_sch, tr_chw, ts_chw,
+                                   float(getattr(si, 'tr_cw_design_SCH', 30.0)),
+                                   float(getattr(si, 'ts_cw_design_SCH', 35.0)))
+        chw_b, cw_b = self._derive_flows(q_bch, cop_bch, si.delta_t_chw, si.delta_t_cw)
+        chw_s, cw_s = self._derive_flows(q_sch, cop_sch, si.delta_t_chw, si.delta_t_cw)
+
+        derived = {
+            'COP_chiller_BCH': cop_bch, 'COP_chiller_SCH': cop_sch,
+            'Gr_pump_chw_BCH': chw_b, 'Gr_pump_chw_SCH': chw_s,
+            'Gr_pump_cw_BCH': cw_b, 'Gr_pump_cw_SCH': cw_s,
+            # 冷却塔设计水流量 = 冷却泵流量
+            'Gr_tower_BCH': cw_b, 'Gr_tower_SCH': cw_s,
+        }
+        for key, value in derived.items():
+            if value is not None and hasattr(si, key):
+                setattr(si, key, float(value))
+        self._derived_design = dict(derived)
+        return derived
+
+    def _effective_parameters(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """返回「实际参与计算」的参数快照。
+
+        配置里的冷机/水泵/冷却塔额定值都是**基准值**，实际值 = 基准 × 冷机容量放大系数。
+        报告要求与参数快照逐项一致，所以快照必须是实际值，不能原样回显基准值，
+        否则报告里会出现"额定制冷量 2112.6 kW、总装机 316,890 kW"这种自相矛盾的表。
+        """
+        params = dict(config or {})
+        try:
+            cf = float(getattr(self.station_info, 'capacity_factor', 1.0) or 1.0)
+        except (TypeError, ValueError):
+            cf = 1.0
+        # 额定容量：基准 → 实际（× 放大系数）
+        for key in ('Qr_chiller_BCH', 'Qr_chiller_SCH'):
+            if key in params and isinstance(params[key], (int, float)):
+                params[key] = float(params[key]) * cf
+        # 加机优先级序列同样按实际容量给出（与大小机额定制冷量一致）
+        qr_list = params.get('Qr_list')
+        if isinstance(qr_list, list) and qr_list:
+            params['Qr_list'] = [float(q) * cf for q in qr_list if isinstance(q, (int, float))]
+        # 设计工况派生量（D1/D2）：以本次计算出来的为准，覆盖任何来源
+        for key, value in (getattr(self, '_derived_design', None) or {}).items():
+            if value is not None:
+                params[key] = float(value)
+        # 新结果不再有"仅展示"参数：塔设计功率与 COP 均已参与计算或为派生值
+        return params
+
+    def _tower_power_scales(self) -> Dict[str, Any]:
+        """返回各通道冷却塔的设计功率归一系数（D3），供结果追溯。"""
+        out: Dict[str, Any] = {}
+        station = getattr(self, 'station', None)
+        for name in ('channel_BCH', 'channel_SCH'):
+            ch = getattr(station, name, None)
+            tower = getattr(ch, 'tower', None)
+            if tower is not None:
+                out[name.replace('channel_', '')] = float(getattr(tower, 'k_power', 1.0))
+        return out
 
     def _display_only_deviations(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """仅展示参数的标称值 vs 模型值偏差（D7/6.3）
@@ -365,11 +477,15 @@ class AlgorithmWrapper:
         self, 
         data: List[Dict[str, Any]], 
         config: Optional[Dict[str, Any]] = None,
-        area: float = 2931.0,
-        meta: Optional[Dict[str, Any]] = None
+        area: float = 2931000.0,
+        meta: Optional[Dict[str, Any]] = None,
+        result_sink: Optional[Dict[str, Any]] = None
     ) -> Iterator[Dict[str, Any]]:
         """
         流式运行仿真计算 - 每计算完一周立即 yield 结果
+
+        result_sink（D8）：生成器结束前把本次结果写入调用方传入的字典，
+        避免并发任务共享 self._last_* 而互相串号。缺省 None 时行为不变。
         """
         # ===== 更新配置 =====
         if config:
@@ -377,7 +493,7 @@ class AlgorithmWrapper:
         
         if not ALGORITHM_AVAILABLE or self.station is None:
             print("⚠️ 算法不可用，使用模拟流式模式")
-            yield from self._run_mock_simulation_streaming(data, area)
+            yield from self._run_mock_simulation_streaming(data, area, result_sink)
             return
         
         if not data or len(data) == 0:
@@ -483,8 +599,25 @@ class AlgorithmWrapper:
         extrap = self._extrapolation_stats(all_hours, cfg)
         self._last_emission_factor = factor
 
+        _display_only = provided.get('displayOnly') or []
+
         t_dry = [h['temp'] for h in all_hours]
         humid = [h['humid'] for h in all_hours]
+
+        # ===== 设计裕度（D3）：总装机 ÷ 建筑负荷最大值，只读派生值 =====
+        loads = [h['load'] for h in all_hours]
+        peak_load = float(max(loads)) if loads else 0.0
+        installed_total = float(getattr(self.station, 'Q_installed_total', 0.0) or 0.0)
+        if installed_total <= 0 and self.station_info is not None:
+            cf = float(getattr(self.station_info, 'capacity_factor', 1.0) or 1.0)
+            installed_total = (
+                self.station_info.Qr_chiller_BCH * self.station_info.n_design_BCH
+                + self.station_info.Qr_chiller_SCH * self.station_info.n_design_SCH
+            ) * cf
+        design_margin = (installed_total / peak_load) if peak_load > 0 else None
+        self._last_design_margin = design_margin
+        self._last_installed_total = installed_total
+
         self._last_meta = {
             # 数据溯源
             'fileName': provided.get('fileName'),
@@ -504,9 +637,11 @@ class AlgorithmWrapper:
             'buildingType': provided.get('buildingType'),
             'area': provided.get('area', area),
             # 口径
-            'caliberVersion': 'v1',
-            'loadCoe': cfg.get('load_coe') if cfg.get('load_coe') is not None
-                        else getattr(self.station_info, 'load_coe', None),
+            'caliberVersion': 'v2',
+            'capacityFactor': float(getattr(self.station_info, 'capacity_factor', 1.0) or 1.0),
+            'peakLoad': peak_load or None,
+            'installedCapacity': installed_total or None,
+            'designMargin': design_margin,
             # 碳排口径
             'carbonFactor': {
                 'value': factor,
@@ -526,10 +661,15 @@ class AlgorithmWrapper:
                 'note': extrap['note'],
             },
             # 参数快照（4.4/6.5）
-            'parameters': provided.get('parameters') or cfg,
-            'displayOnly': provided.get('displayOnly') or ['COP_chiller_BCH', 'COP_chiller_SCH',
-                                                            'Pr_tower_BCH', 'Pr_tower_SCH'],
-            'displayOnlyDeviations': self._display_only_deviations(cfg),
+            # 参数快照一律由后端按实际生效值生成（D2：后端是唯一事实源），
+            # 不采用调用方传入的 parameters，避免把提交的基准值当成实际值
+            'parameters': self._effective_parameters(cfg),
+            # 新结果不再有"仅展示"参数（D4）：COP 为派生值、塔设计功率参与计算
+            'displayOnly': _display_only,
+            'displayOnlyDeviations': (self._display_only_deviations(self._effective_parameters(cfg))
+                                      if _display_only else {}),
+            # 冷却塔设计功率的归一系数（D3），供追溯
+            'towerPowerScale': self._tower_power_scales(),
         }
         self._last_summary = {
             'totalEnergy': year['totalEnergyConsumption'],
@@ -539,6 +679,7 @@ class AlgorithmWrapper:
             'peakCoolingLoad': year['peakCoolingLoad'],
             'peakHeatingLoad': 0,
             'avgCop': year['avgChillerCop'],
+            'avgChillerLoadRate': year['avgChillerLoadRate'],
             'systemEER': year['systemEER'],
             'totalUnmet': year['totalUnmet'],
             'unmetHours': year['unmetHours'],
@@ -553,6 +694,15 @@ class AlgorithmWrapper:
 
         print(f"仿真完成: 小时数={len(all_hours)}, 总能耗={year['totalEnergyConsumption']:.2f} kWh, "
               f"总供冷量={year['totalQStation']:.2f} kWh, 系统能效={year['systemEER']:.2f}")
+
+        if result_sink is not None:
+            result_sink.update({
+                'summary': self._last_summary,
+                'weekly_data': self._last_weekly_data,
+                'monthly_data': self._last_monthly_data,
+                'meta': self._last_meta,
+                'unmet_hours_detail': self._last_unmet_hours,
+            })
     
     # ===== 逐时计算与聚合（D1/D2/D3/D4/D6）=====
     def _iter_rows(self, df, load_col, temp_col, humid_col):
@@ -582,9 +732,8 @@ class AlgorithmWrapper:
         else:
             q = ec_ch = ec_pw = ec_cw = ec_tw = cop = eers = unmet = off = 0.0
 
-        # 冷负荷统一换算到计算量纲（kW），保证与供冷量可比
-        load_coe = float(getattr(self.station_info, 'load_coe', 1.0) or 1.0)
-        load_kw = load * load_coe
+        # 负荷本身即为 kW，直接使用（口径 v2，不再施加量纲换算）
+        load_kw = load
 
         n_active = list(st.n_active_list) if st is not None and st.n_active_list else []
         n_sch = float(n_active[0]) if len(n_active) > 0 else 0.0
@@ -602,6 +751,8 @@ class AlgorithmWrapper:
             'unmet': unmet, 'unserved_off': off,
             'n_sch': n_sch, 'n_bch': n_bch,
             'load_rate': load_rate,
+            # 当小时在线冷机的额定制冷量之和（kW），用于计算全年冷机平均负荷率
+            'q_installed_active': installed,
         }
 
     def _group_by_month(self, hours):
@@ -622,6 +773,7 @@ class AlgorithmWrapper:
             'breakdown': {'chiller': 0.0, 'pump_chw': 0.0, 'pump_cw': 0.0, 'tower': 0.0},
             'totalUnmet': 0.0, 'unmetHours': 0, 'totalUnservedOff': 0.0,
             'avgChillerCop': 0.0, 'systemEER': 0.0, 'avgOutdoorTemp': 0.0,
+            'avgChillerLoadRate': 0.0,
             'operatingStats': {}, 'loadRateHistogram': [0] * 10, 'peakContext': None,
         }
         if n == 0:
@@ -629,6 +781,7 @@ class AlgorithmWrapper:
 
         cop_sum = cop_cnt = 0.0
         temp_sum = 0.0
+        installed_active_sum = 0.0
         op = {}
         hist = [0] * 10
         peak = None
@@ -646,6 +799,7 @@ class AlgorithmWrapper:
             agg['breakdown']['pump_cw'] += h['ec_pump_cw']
             agg['breakdown']['tower'] += h['ec_tower']
             temp_sum += h['temp']
+            installed_active_sum += h.get('q_installed_active', 0.0) or 0.0
             if h['cop_chiller'] > 0:
                 cop_sum += h['cop_chiller']
                 cop_cnt += 1
@@ -662,6 +816,11 @@ class AlgorithmWrapper:
         bd = agg['breakdown']
         agg['totalEnergyConsumption'] = bd['chiller'] + bd['pump_chw'] + bd['pump_cw'] + bd['tower']
         agg['avgChillerCop'] = cop_sum / cop_cnt if cop_cnt > 0 else 0.0
+        # 全年冷机平均负荷率 = 总供冷量 ÷ Σ(在线冷机额定制冷量 × 1h) × 100%
+        agg['avgChillerLoadRate'] = (
+            agg['totalQStation'] / installed_active_sum * 100.0
+            if installed_active_sum > 0 else 0.0
+        )
         agg['systemEER'] = (agg['totalQStation'] / agg['totalEnergyConsumption']
                             if agg['totalEnergyConsumption'] > 0 else 0.0)
         agg['avgOutdoorTemp'] = temp_sum / n
@@ -721,7 +880,8 @@ class AlgorithmWrapper:
         """获取逐时供冷缺口明细（仅包含存在缺口的小时）"""
         return getattr(self, '_last_unmet_hours', [])
     
-    def _run_mock_simulation_streaming(self, data: List[Dict[str, Any]], area: float = 2931.0) -> Iterator[Dict[str, Any]]:
+    def _run_mock_simulation_streaming(self, data: List[Dict[str, Any]], area: float = 2931000.0,
+                                       result_sink: Optional[Dict[str, Any]] = None) -> Iterator[Dict[str, Any]]:
         """模拟流式仿真"""
         print("⚠️ 使用模拟流式仿真")
         
@@ -730,6 +890,8 @@ class AlgorithmWrapper:
         total_q_station = 0.0
         peak_load = 0.0
         
+        weekly: List[Dict[str, Any]] = []
+
         for week in range(1, 53):
             week_p_station = 1500 + random.uniform(0, 1500)
             cooling_load = 200 + random.uniform(0, 300)
@@ -751,6 +913,7 @@ class AlgorithmWrapper:
             if cooling_load > peak_load:
                 peak_load = cooling_load
             
+            weekly.append(week_result)
             yield week_result
         
         self._last_summary = {
@@ -761,9 +924,18 @@ class AlgorithmWrapper:
             'peakCoolingLoad': peak_load,
             'peakHeatingLoad': 0,
             'avgCop': 3.2,
+            'avgChillerLoadRate': 0.0,
             'carbonEmission': total_p_station * 0.5,
             'area': area
         }
+        if result_sink is not None:
+            result_sink.update({
+                'summary': self._last_summary,
+                'weekly_data': weekly,
+                'monthly_data': [],
+                'meta': {},
+                'unmet_hours_detail': [],
+            })
 
 
 # 单例

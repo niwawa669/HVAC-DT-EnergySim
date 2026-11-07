@@ -991,10 +991,19 @@ const autoFixAll = () => {
 <style scoped>
 .data-uploader {
     padding: 10px 0;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .upload-area {
     width: 100%;
+    display: block;
+}
+
+/* Element Plus 的拖拽区默认固定 360px，会与上方输入框右端不对齐 */
+.upload-area :deep(.el-upload-dragger) {
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .parse-status {

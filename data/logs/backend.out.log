@@ -1,0 +1,31 @@
+算法路径: D:\BaiduNetdiskWorkspace\github-project\HVAC-DT-EnergySim\src\apiserver\app\services\../../..\algorithm
+✅ 算法模块导入成功
+✅ 冷站仿真算法初始化完成
+📦 一次性回填（v2）：6 条历史任务关联到 3 个项目（新建 2 个）
+🗄️ 持久化就绪: 迁移=[2] 新增账户=0 中断任务=0 报告索引扫描=19 补录=0 缺失产物=0
+INFO:     127.0.0.1:62572 - "OPTIONS /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60902 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60902 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62572 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "OPTIONS /api/projects/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "DELETE /api/projects/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "OPTIONS /api/projects/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "DELETE /api/projects/3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "OPTIONS /api/projects/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "GET /api/projects/1 HTTP/1.1" 200 OK
+🔗 WebSocket 连接请求: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+✅ WebSocket 已接受: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 注册成功: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 当前连接数: 1
+📝 WebSocket 已注册: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📤 已发送连接确认: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+INFO:     127.0.0.1:51021 - "OPTIONS /api/simulate/status/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "GET /api/simulate/status/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "OPTIONS /api/simulate/results/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51021 - "GET /api/simulate/results/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+⚠️ WebSocket 断开: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 剩余连接数: 0
+📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+INFO:     127.0.0.1:55032 - "GET /api/projects HTTP/1.1" 200 OK

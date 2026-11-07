@@ -147,6 +147,37 @@
 
             <!-- 雷达图 -->
             <div ref="radarChartRef" class="radar-chart-container"></div>
+
+            <!-- 五维评分明细：位置（分数）与原始值、评价基准对照 -->
+            <el-table v-if="radarMetrics.length" :data="radarMetrics" size="small" border
+                class="radar-benchmark-table">
+                <el-table-column prop="name" label="维度" width="150" />
+                <el-table-column prop="display" label="当前值" width="160" />
+                <el-table-column label="得分" width="80" align="center">
+                    <template #default="{ row }">{{ row.available ? row.score : '—' }}</template>
+                </el-table-column>
+                <el-table-column label="评价" width="95" align="center">
+                    <template #default="{ row }">
+                        <el-tag :type="levelTagType(row.level)" size="small">{{ row.level }}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column label="评价基准" min-width="260">
+                    <template #default="{ row }">
+                        <el-tooltip :content="row.source" placement="top">
+                            <span>{{ row.benchmark }}</span>
+                        </el-tooltip>
+                    </template>
+                </el-table-column>
+            </el-table>
+            <div v-if="radarMetrics.length" class="radar-benchmark-note">
+                雷达图为 0–100 分归一化评分，越靠外表示该维度表现越好；评价基准依据
+                GB 50189-2015、GB 55015-2021、GB 19577-2024、GB/T 51161-2016、GB/T 51366-2019，
+                单位面积指标为冷源站口径（按建筑总量约 35% 折算）。悬停“评价基准”可查看具体来源。
+                分数按当前基准折算：基准或阈值更新后，历史结果的分数与等级会随之变化，结果数值本身不变。
+            </div>
+            <el-alert v-if="radarMissing.length" class="radar-missing-note" type="info"
+                :closable="false" show-icon
+                :title="'部分维度缺失（旧结果），未参与雷达绘制：' + radarMissing.join('、') + '；请重新仿真以补齐指标。'" />
         </el-card>
     </div>
 </template>
@@ -163,7 +194,8 @@ import {
 } from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { formatNumber } from '@/utils/format'
-import { restartSimulation, getSimulationResults } from '@/api/simulation'
+import { buildRadarMetrics, type MetricLevel, type RadarMetric } from '@/utils/radarMetrics'
+import { getSimulationResults, getSimulationStatus, restartSimulation } from '@/api/simulation'
 import { generateReport } from '@/api/reports'
 
 // ===== 路由 =====
@@ -740,79 +772,72 @@ const updateChart = () => {
     chartInstance.setOption(option)
 }
 
-// ===== 雷达图（五维冷源站指标） =====
+// ===== 雷达图（五维冷源站指标，0–100 归一化评分） =====
+const radarMetrics = computed<RadarMetric[]>(() => {
+    const result = resultData.value as any
+    if (!result) return []
+    return buildRadarMetrics(result.summary || {}, result.meta || {})
+})
+
+const radarPlotMetrics = computed<RadarMetric[]>(() =>
+    radarMetrics.value.filter((item) => item.available),
+)
+
+// 旧结果缺指标的维度只留在明细表里，不参与绘制（不得按 0 分落在圆心）
+const radarMissing = computed<string[]>(() =>
+    radarMetrics.value.filter((item) => !item.available).map((item) => item.name),
+)
+
+const levelTagType = (level: MetricLevel): 'success' | 'primary' | 'warning' | 'danger' | 'info' => {
+    if (level === '优秀') return 'success'
+    if (level === '良好') return 'primary'
+    if (level === '达标') return 'warning'
+    if (level === '缺失') return 'info'
+    return 'danger'
+}
+
 const initRadarChart = () => {
     if (!radarChartRef.value || !resultData.value) return
 
+    // 只用有原始指标的维度绘制：缺指标的旧结果不按 0 分参与评价
+    const metrics = radarPlotMetrics.value
+    if (metrics.length < 3) return
+
+    // 结果可能先后更新（先收到 completed 的汇总，再拉到完整七区块），
+    // 同一 DOM 重复 init 会叠加实例并留下旧数据，必须先把旧实例销毁。
+    if (radarChartInstance) {
+        radarChartInstance.dispose()
+        radarChartInstance = null
+    }
+    const existing = echarts.getInstanceByDom(radarChartRef.value)
+    if (existing) {
+        existing.dispose()
+    }
+
     radarChartInstance = echarts.init(radarChartRef.value)
-
-    const summary = resultData.value.summary || {}
-    const meta = (resultData.value as any).meta || {}
-    const monthly = (resultData.value as any).monthly || []
-
-    // ===== 五维参数计算 =====
-
-    // 1. 冷源站综合平均能效 EERa = 总供冷量 / 总耗电量
-    const totalQStation = summary.totalQStation || 0
-    const totalEnergy = summary.totalEnergy || 0
-    const eera = summary.systemEER ?? (totalEnergy > 0 ? totalQStation / totalEnergy : 0)
-
-    // 2. 全年平均负荷率 = 总供冷量 / (装机容量 × 计算小时数)
-    const p = meta.parameters || {}
-    const installed =
-        (Number(p.Qr_chiller_BCH) || 0) * (Number(p.n_design_BCH) || 0) +
-        (Number(p.Qr_chiller_SCH) || 0) * (Number(p.n_design_SCH) || 0)
-    const totalHours = Number(meta.totalHours) || 0
-    const avgLoadRate =
-        installed > 0 && totalHours > 0
-            ? Math.min((totalQStation / (installed * totalHours)) * 100, 100)
-            : 0
-    void monthly
-
-    // 3. 单位面积供冷量 (kWh/m²)
-    const area = summary.area || 2931
-    const unitQStation = area > 0 ? totalQStation / area : 0
-
-    // 4. 单位面积耗电量 (kWh/m²)
-    const unitEnergy = area > 0 ? totalEnergy / area : 0
-
-    // 5. 单位面积碳排放量 (kg CO₂/m²)
-    const carbonEmission = summary.carbonEmission || 0
-    const unitCarbon = area > 0 ? carbonEmission / area : 0
-
-    // ===== 各维度最大值 =====
-    const maxEera = Math.max(eera * 1.5, 5)
-    const maxLoadRate = 100
-    const maxUnitQStation = Math.max(unitQStation * 1.5, 50)
-    const maxUnitEnergy = Math.max(unitEnergy * 1.5, 20)
-    const maxUnitCarbon = Math.max(unitCarbon * 1.5, 10)
 
     const option = {
         tooltip: {
             trigger: 'item',
-            formatter: function (params: any) {
-                let result = `<strong>${params.name}</strong><br/>`
-                const names = ['综合平均能效 EERa', '全年平均负荷率', '单位面积供冷量', '单位面积耗电量', '单位面积碳排放']
-                const units = ['', ' %', ' kWh/m²', ' kWh/m²', ' kg CO₂/m²']
-                const values = [eera, avgLoadRate, unitQStation, unitEnergy, unitCarbon]
-                params.value.forEach((val: number, index: number) => {
-                    const displayVal = index === 0 ? values[index].toFixed(2) : values[index].toFixed(1)
-                    result += `${names[index]}: ${displayVal}${units[index]}<br/>`
-                })
-                return result
-            }
+            formatter: () => metrics
+                .map((item) =>
+                    `<strong>${item.name}</strong>：${item.display}（${item.score} 分 · ${item.level}）`
+                    + `<br/><span style="color:#909399">基准：${item.benchmark}</span>`,
+                )
+                .join('<br/>')
         },
         radar: {
-            indicator: [
-                { name: '综合平均能效 EERa', max: maxEera, color: '#9B59B6' },
-                { name: '全年平均负荷率', max: maxLoadRate, color: '#67C23A' },
-                { name: '单位面积供冷量', max: maxUnitQStation, color: '#409EFF' },
-                { name: '单位面积耗电量', max: maxUnitEnergy, color: '#F56C6C' },
-                { name: '单位面积碳排放', max: maxUnitCarbon, color: '#909399' }
-            ],
+            // 五个维度统一为 0–100 分，位置越靠外代表该维度表现越好
+            indicator: metrics.map((item) => ({
+                name: `${item.name}\n${item.score} 分 · ${item.level}`,
+                max: 100
+            })),
             shape: 'circle',
             center: ['50%', '50%'],
-            radius: '65%',
+            radius: '62%',
+            splitNumber: 4,
+            axisLabel: { show: false },
+            axisTick: { show: false },
             axisName: {
                 color: '#333',
                 fontSize: 11,
@@ -830,12 +855,41 @@ const initRadarChart = () => {
                 }
             }
         },
+        legend: {
+            data: ['当前方案', '60 分达标参考线'],
+            bottom: 0,
+            itemWidth: 12,
+            itemHeight: 8,
+            textStyle: { fontSize: 11 }
+        },
         series: [
             {
                 type: 'radar',
+                name: '60 分达标参考线',
+                silent: true,
+                tooltip: { show: false },
                 data: [
                     {
-                        value: [eera, avgLoadRate, unitQStation, unitEnergy, unitCarbon],
+                        value: metrics.map(() => 60),
+                        name: '60 分达标参考线',
+                        symbol: 'none',
+                        lineStyle: {
+                            type: 'dashed',
+                            color: '#E6A23C',
+                            width: 1
+                        },
+                        areaStyle: { color: 'transparent' },
+                        itemStyle: { color: '#E6A23C' },
+                        label: { show: false }
+                    }
+                ]
+            },
+            {
+                type: 'radar',
+                name: '当前方案',
+                data: [
+                    {
+                        value: metrics.map((item) => item.score),
                         name: '当前方案',
                         areaStyle: {
                             color: 'rgba(64, 158, 255, 0.3)'
@@ -847,16 +901,7 @@ const initRadarChart = () => {
                         itemStyle: {
                             color: '#409EFF'
                         },
-                        label: {
-                            show: true,
-                            formatter: (params: any) => {
-                                const values = [eera, avgLoadRate, unitQStation, unitEnergy, unitCarbon]
-                                const val = values[params.dataIndex] || 0
-                                return val.toFixed(1)
-                            },
-                            fontSize: 10,
-                            color: '#333'
-                        }
+                        label: { show: false }
                     }
                 ]
             }
@@ -951,6 +996,29 @@ const cleanup = () => {
     window.removeEventListener('resize', handleResize)
 }
 
+// ===== 打开已完成任务时主动加载状态/结果（不一定有 WebSocket 推送）=====
+const loadTaskState = async () => {
+    try {
+        const status = await getSimulationStatus(taskId)
+        progress.value = status.progress ?? 0
+        if (status.status === 'completed') {
+            isCompleted.value = true
+            progress.value = 100
+            addLog('✅ 任务已完成，加载结果…', 'success')
+            await loadFullResult()
+        } else if (status.status === 'failed') {
+            addLog(`❌ 仿真失败: ${status.message || '未知错误'}`, 'error')
+        } else if (status.status === 'cancelled') {
+            addLog('⏹️ 仿真已取消', 'warning')
+        } else {
+            addLog(`⏳ 任务状态: ${status.status}（${status.progress}%）`, 'info')
+        }
+    } catch (error) {
+        // 任务不存在时不打断页面（例如旧链接）
+        console.warn('加载任务状态失败:', error)
+    }
+}
+
 // ===== 生命周期 =====
 onMounted(() => {
     console.log('🔄 SimulationView mounted, taskId:', taskId)
@@ -976,6 +1044,9 @@ onMounted(() => {
     addLog('📡 仿真监控已启动', 'info')
     addLog(`🔑 任务ID: ${taskId}`, 'info')
     addLog('⏳ 等待数据推送...', 'info')
+
+    // 重新打开已完成的任务时，WebSocket 不会重放 completed 消息，必须主动拉一次
+    void loadTaskState()
 
     setTimeout(() => {
         console.log('🔗 当前连接状态:', isConnected.value)
@@ -1260,8 +1331,23 @@ watch(resultData, () => {
 
 .radar-chart-container {
     width: 100%;
-    height: 300px;
+    height: 340px;
     margin-top: 16px;
+}
+
+.radar-benchmark-table {
+    margin-top: 16px;
+}
+
+.radar-benchmark-note {
+    margin-top: 10px;
+    color: #909399;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.radar-missing-note {
+    margin-top: 10px;
 }
 
 @media (max-width: 768px) {

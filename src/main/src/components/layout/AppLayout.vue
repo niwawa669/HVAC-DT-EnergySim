@@ -25,6 +25,12 @@
                     </el-icon>
                     <span>项目列表</span>
                 </el-menu-item>
+                <el-menu-item index="/account">
+                    <el-icon>
+                        <User />
+                    </el-icon>
+                    <span>账户设置</span>
+                </el-menu-item>
                 <el-menu-item v-if="isAdmin" index="/admin/users">
                     <el-icon>
                         <Setting />
@@ -44,7 +50,24 @@
                     <h3 style="margin: 0;">{{ currentPageTitle || 'HVAC仿真系统' }}</h3>
                 </div>
                 <div class="header-right">
-                    <el-button @click="handleLogout" text>退出登录</el-button>
+                    <el-dropdown @command="handleCommand">
+                        <span class="user-entry">
+                            <el-icon>
+                                <UserFilled />
+                            </el-icon>
+                            <span>{{ userStore.userName }}</span>
+                            <el-tag v-if="isAdmin" type="danger" size="small">管理员</el-tag>
+                            <el-icon>
+                                <ArrowDown />
+                            </el-icon>
+                        </span>
+                        <template #dropdown>
+                            <el-dropdown-menu>
+                                <el-dropdown-item command="account">账户设置</el-dropdown-item>
+                                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+                            </el-dropdown-menu>
+                        </template>
+                    </el-dropdown>
                 </div>
             </el-header>
 
@@ -56,11 +79,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataBoard, Plus, Folder, Setting } from '@element-plus/icons-vue'
+import { ArrowDown, DataBoard, Folder, Plus, Setting, User, UserFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/userStore'
+import { getCurrentUser } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -71,11 +95,22 @@ const isAdmin = computed(() => userStore.isAdmin)
 
 const activeMenu = computed(() => route.path)
 
+// 角色/邮箱可能在管理员侧被修改：进入布局时同步一次，菜单与权限判断随之更新
+onMounted(async () => {
+    try {
+        const me = await getCurrentUser()
+        userStore.updateUser(me)
+    } catch (error) {
+        console.warn('同步当前账户信息失败:', error)
+    }
+})
+
 const currentPageTitle = computed(() => {
     const titles: Record<string, string> = {
         '/': '仪表板',
         '/project/new': '新建项目',
         '/projects': '项目列表',
+        '/account': '账户设置',
         '/admin/users': '用户管理'
     }
     return titles[route.path] || ''
@@ -89,6 +124,14 @@ const handleLogout = () => {
     userStore.logout()
     ElMessage.success('已退出登录')
     router.push('/login')
+}
+
+const handleCommand = (command: string) => {
+    if (command === 'account') {
+        router.push('/account')
+    } else if (command === 'logout') {
+        handleLogout()
+    }
 }
 </script>
 
@@ -160,6 +203,15 @@ const handleLogout = () => {
     display: flex;
     align-items: center;
     gap: 16px;
+}
+
+.user-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    color: #303133;
+    font-size: 14px;
 }
 
 .app-main {

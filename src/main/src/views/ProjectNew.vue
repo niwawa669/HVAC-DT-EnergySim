@@ -32,8 +32,8 @@
                         </el-select>
                     </el-form-item>
 
-                    <el-form-item label="建筑空调面积 (m²)">
-                        <el-input-number v-model="projectForm.area" :min="100" :max="1000000" :step="100"
+                    <el-form-item label="建筑空调面积 (m²)" required>
+                        <el-input-number v-model="projectForm.area" :min="100" :max="10000000" :step="1000"
                             controls-position="right" style="width: 100%;" />
                     </el-form-item>
 
@@ -76,15 +76,15 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="建筑负荷 (kW)">
+                                    <el-form-item label="建筑负荷 (kW)" required>
                                         <el-input-number v-model="equipmentForm.load_building_r" :min="0" :step="100"
                                             controls-position="right" style="width: 100%;" />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
-                                    <el-form-item label="量纲换算系数 (W→kW)">
-                                        <el-input-number v-model="equipmentForm.load_coe" :min="0" :step="0.001"
-                                            :precision="4" controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="冷机容量放大系数（实际容量 ÷ 2112.6）" required>
+                                        <el-input-number v-model="equipmentForm.capacity_factor" :min="0.1" :max="1000"
+                                            :step="1" :precision="2" controls-position="right" style="width: 100%;" />
                                     </el-form-item>
                                 </el-col>
                             </el-row>
@@ -94,9 +94,8 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="大机额定制冷量 (kW)">
-                                        <el-input-number v-model="equipmentForm.Qr_chiller_BCH" :min="0" :step="10"
-                                            controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="大机额定制冷量 (kW，派生只读 = 2112.6 × 系数)">
+                                        <el-input :model-value="qrBCH.toFixed(1)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
@@ -109,9 +108,8 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="大机COP（仅展示，不参与计算）">
-                                        <el-input-number v-model="equipmentForm.COP_chiller_BCH" :min="0" :max="10"
-                                            :step="0.1" :precision="2" controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="大机COP（派生只读：冷机模型在设计工况计算）">
+                                        <el-input :model-value="copText(derived.copBCH)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
@@ -121,9 +119,8 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="小机额定制冷量 (kW)">
-                                        <el-input-number v-model="equipmentForm.Qr_chiller_SCH" :min="0" :step="10"
-                                            controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="小机额定制冷量 (kW，派生只读 = 1056.3 × 系数)">
+                                        <el-input :model-value="qrSCH.toFixed(1)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
@@ -136,15 +133,31 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="小机COP（仅展示，不参与计算）">
-                                        <el-input-number v-model="equipmentForm.COP_chiller_SCH" :min="0" :max="10"
-                                            :step="0.1" :precision="2" controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="小机COP（派生只读：冷机模型在设计工况计算）">
+                                        <el-input :model-value="copText(derived.copSCH)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
                                     <!-- 空位 -->
                                 </el-col>
                             </el-row>
+
+                            <el-row :gutter="20">
+                                <el-col :span="12">
+                                    <el-form-item label="设计裕度（只读派生 = 总装机 ÷ 峰值负荷）">
+                                        <el-input :model-value="designMarginText" readonly disabled />
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="12">
+                                    <el-form-item label="判定">
+                                        <el-tag :type="marginTagType" size="small">{{ marginAdvice }}</el-tag>
+                                        <span class="margin-hint">合理区间 0.9 ~ 1.1</span>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+
+                            <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
+                                title="COP 由冷机模型在设计工况计算；修改设计温度或温差会同步改变 COP、泵流量与冷却塔流量。" />
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
@@ -181,9 +194,8 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="大机冷冻泵设计流量 (L/s)">
-                                        <el-input-number v-model="equipmentForm.Gr_pump_chw_BCH" :min="0" :step="1"
-                                            controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="大机冷冻泵设计流量 (L/s，派生 = Q ÷ (4.187 × ΔT))">
+                                        <el-input :model-value="flowText(flows.chwBCH)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
@@ -208,9 +220,8 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="小机冷冻泵设计流量 (L/s)">
-                                        <el-input-number v-model="equipmentForm.Gr_pump_chw_SCH" :min="0" :step="1"
-                                            controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="小机冷冻泵设计流量 (L/s，派生 = Q ÷ (4.187 × ΔT))">
+                                        <el-input :model-value="flowText(flows.chwSCH)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
@@ -238,9 +249,8 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="大机冷却泵设计流量 (L/s)">
-                                        <el-input-number v-model="equipmentForm.Gr_pump_cw_BCH" :min="0" :step="1"
-                                            controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="大机冷却泵设计流量 (L/s，派生 = Q×(1+1/COP) ÷ (4.187 × ΔT))">
+                                        <el-input :model-value="flowText(flows.cwBCH)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
@@ -265,9 +275,8 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="小机冷却泵设计流量 (L/s)">
-                                        <el-input-number v-model="equipmentForm.Gr_pump_cw_SCH" :min="0" :step="1"
-                                            controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="小机冷却泵设计流量 (L/s，派生 = Q×(1+1/COP) ÷ (4.187 × ΔT))">
+                                        <el-input :model-value="flowText(flows.cwSCH)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
@@ -295,13 +304,12 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="大机冷却塔设计流量 (L/s)">
-                                        <el-input-number v-model="equipmentForm.Gr_tower_BCH" :min="0" :step="10"
-                                            controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="大机冷却塔设计流量 (L/s，派生 = 冷却泵流量)">
+                                        <el-input :model-value="flowText(flows.cwBCH)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
-                                    <el-form-item label="大机冷却塔设计功率 (kW)（仅展示）">
+                                    <el-form-item label="大机冷却塔设计功率 (kW，参与计算：按设计点归一)">
                                         <el-input-number v-model="equipmentForm.Pr_tower_BCH" :min="0" :step="1"
                                             controls-position="right" style="width: 100%;" />
                                     </el-form-item>
@@ -325,13 +333,12 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="小机冷却塔设计流量 (L/s)">
-                                        <el-input-number v-model="equipmentForm.Gr_tower_SCH" :min="0" :step="10"
-                                            controls-position="right" style="width: 100%;" />
+                                    <el-form-item label="小机冷却塔设计流量 (L/s，派生 = 冷却泵流量)">
+                                        <el-input :model-value="flowText(flows.cwSCH)" readonly disabled />
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
-                                    <el-form-item label="小机冷却塔设计功率 (kW)（仅展示）">
+                                    <el-form-item label="小机冷却塔设计功率 (kW，参与计算：按设计点归一)">
                                         <el-input-number v-model="equipmentForm.Pr_tower_SCH" :min="0" :step="1"
                                             controls-position="right" style="width: 100%;" />
                                     </el-form-item>
@@ -488,20 +495,18 @@
 
                             <el-row :gutter="20">
                                 <el-col :span="12">
-                                    <el-form-item label="冷机加机优先级设置 (Qr_list)">
-                                        <el-input v-model="controlForm.Qr_list_str" placeholder="例如: 39.7404, 79.4808"
-                                            style="width: 100%;" />
+                                    <el-form-item label="冷机加机优先级设置 (Qr_list，派生只读)">
+                                        <el-input :model-value="qrListText" readonly disabled />
                                         <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-                                            按优先级顺序填写冷机额定冷量，用逗号分隔
+                                            由小机/大机基准容量自动生成，与选型保持同口径
                                         </div>
                                     </el-form-item>
                                 </el-col>
                                 <el-col :span="12">
-                                    <el-form-item label="对应Qr_list的冷机设计台数">
-                                        <el-input v-model="controlForm.n_design_list_str" placeholder="例如: 1, 3"
-                                            style="width: 100%;" />
+                                    <el-form-item label="对应Qr_list的冷机设计台数（派生只读）">
+                                        <el-input :model-value="nDesignListText" readonly disabled />
                                         <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-                                            按优先级顺序填写台数，用逗号分隔
+                                            必须与冷机台数一致，否则群控会按错误台数投运
                                         </div>
                                     </el-form-item>
                                 </el-col>
@@ -671,12 +676,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, ArrowLeft, VideoPlay, CircleCheck } from '@element-plus/icons-vue'
 import DataUploader from '@/components/data/DataUploader.vue'
 import { startSimulation as startSimulationAPI } from '@/api/simulation'
+import { api } from '@/api'
 
 const router = useRouter()
 
@@ -689,52 +695,46 @@ const dataConfirmed = ref(false)
 
 // ===== 项目表单 =====
 const projectForm = reactive({
-    name: '',
-    buildingType: '',
-    area: 10000
+    name: '测试项目',
+    buildingType: 'office',
+    area: 100000
 })
 
 // ===== 设备选型参数 =====
 const equipmentForm = reactive({
-    // 建筑负荷
-    load_building_r: 196572.0,
-    load_coe: 0.001,          // 量纲换算 W -> kW（口径 v1）
+    // 建筑负荷（必填，默认 0 作为占位）
+    load_building_r: 0,
+    capacity_factor: 1.0,     // 冷机容量放大系数：实际单机容量 = 基准容量 × 该系数
 
-    // 冷机参数（默认值 ÷26.58 重标定，见 docs/data-contract.md）
-    Qr_chiller_BCH: 79.4808,
-    n_design_BCH: 3,
-    COP_chiller_BCH: 5.5,     // 仅展示：标称值 vs 模型值校核
-    Qr_chiller_SCH: 39.7404,
+    // 冷机参数
+    // 额定制冷量不再手工输入，由 capacity_factor 派生（见 qrBCH / qrSCH）
+    n_design_BCH: 1,
+    // COP 为派生值（见 derived），不再手工输入
+
     n_design_SCH: 1,
-    COP_chiller_SCH: 5.0,     // 仅展示
+
     ts_chw_design: 7.0,
     tr_chw_design: 12.0,
     tr_cw_design: 30.0,
     ts_cw_design: 35.0,
 
-    // 冷冻泵参数
-    Gr_pump_chw_BCH: 3.7961,
+    // 冷冻泵参数（设计流量为派生值，见 flows）
     Hr_pump_chw_BCH: 32.0,
-    n_pump_chw_BCH: 3,
-    Gr_pump_chw_SCH: 1.9007,
+    n_pump_chw_BCH: 1,
     Hr_pump_chw_SCH: 32.0,
     n_pump_chw_SCH: 1,
 
-    // 冷却泵参数
-    Gr_pump_cw_BCH: 4.7442,
+    // 冷却泵参数（设计流量为派生值）
     Hr_pump_cw_BCH: 30.0,
-    n_pump_cw_BCH: 3,
-    Gr_pump_cw_SCH: 2.4078,
+    n_pump_cw_BCH: 1,
     Hr_pump_cw_SCH: 30.0,
     n_pump_cw_SCH: 1,
 
-    // 冷却塔参数
-    Gr_tower_BCH: 7.5245,
-    Pr_tower_BCH: 0.8277,     // 仅展示
+    // 冷却塔参数（水流量派生自冷却泵；设计功率为用户输入，参与计算）
+    Pr_tower_BCH: 22.0,
     Hs_tower_BCH: 4.0,
-    n_tower_BCH: 3,
-    Gr_tower_SCH: 3.7622,
-    Pr_tower_SCH: 0.4515,     // 仅展示
+    n_tower_BCH: 1,
+    Pr_tower_SCH: 12.0,
     Hs_tower_SCH: 3.8,
     n_tower_SCH: 1,
 
@@ -761,9 +761,7 @@ const controlForm = reactive({
     load_up: 0.9,
     load_min: 0.3,
 
-    // 冷机加机优先级
-    Qr_list_str: '39.7404, 79.4808',
-    n_design_list_str: '1, 3',
+    // 冷机加机优先级：Qr_list / n_design_list 均由选型派生，不再手工输入
 
     // 频率控制
     freq_pump_max: 50.0,
@@ -776,14 +774,121 @@ const controlForm = reactive({
 const canProceed = computed(() => {
     return !!projectForm.name &&
         !!projectForm.buildingType &&
+        Number(projectForm.area) > 0 &&
         dataConfirmed.value === true &&
         parsedData.value !== null &&
         parsedData.value?.data?.length > 0
 })
 
 const canStartSimulation = computed(() => {
-    return !simulating.value && parsedData.value !== null
+    return !simulating.value &&
+        parsedData.value !== null &&
+        Number(equipmentForm.load_building_r) > 0 &&
+        Number(equipmentForm.capacity_factor) > 0
 })
+
+// ===== 选型尺度：放大系数派生容量与设计裕度（D3/D4）=====
+const MODEL_QR_BCH = 2112.6   // 模型参考冷机容量 kW
+const MODEL_QR_SCH = 1056.3   // 小机基准容量 kW（大机的一半）
+
+const qrBCH = computed(() => MODEL_QR_BCH * (equipmentForm.capacity_factor || 0))
+const qrSCH = computed(() => MODEL_QR_SCH * (equipmentForm.capacity_factor || 0))
+
+// 建筑负荷最大值：取自上传数据的负荷列
+const peakLoad = computed<number>(() => {
+    const d = parsedData.value
+    if (!d || !d.data?.length) return 0
+    const headers: string[] = d.headers || []
+    const idx = headers.findIndex(h => /load|负荷/i.test(String(h)))
+    if (idx < 0) return 0
+    let m = 0
+    for (const row of d.data) {
+        const v = Number(row[headers[idx]])
+        if (Number.isFinite(v) && v > m) m = v
+    }
+    return m
+})
+
+const installedCapacity = computed(() =>
+    qrBCH.value * equipmentForm.n_design_BCH + qrSCH.value * equipmentForm.n_design_SCH)
+
+// 设计裕度 = 总装机 ÷ 建筑负荷最大值（只读派生，用户不可编辑）
+const designMargin = computed<number>(() => {
+    if (peakLoad.value <= 0) return 0
+    return installedCapacity.value / peakLoad.value
+})
+
+const designMarginText = computed(() => {
+    if (peakLoad.value <= 0) return '待上传负荷数据'
+    return `${designMargin.value.toFixed(4)}（装机 ${installedCapacity.value.toFixed(0)} kW ÷ 峰值 ${peakLoad.value.toFixed(0)} kW）`
+})
+
+const marginTagType = computed<'success' | 'warning' | 'info'>(() => {
+    if (peakLoad.value <= 0) return 'info'
+    const m = designMargin.value
+    return m >= 0.9 && m <= 1.1 ? 'success' : 'warning'
+})
+
+const marginAdvice = computed(() => {
+    if (peakLoad.value <= 0) return '待上传数据'
+    const m = designMargin.value
+    if (m >= 0.9 && m <= 1.1) return '装机合理'
+    return m < 0.9 ? '装机偏小' : '装机偏大'
+})
+
+// ===== 设计工况派生（D1/D2）=====
+// COP 由后端调用冷机模型计算（前端无法运行模型）；流量由前端用同一公式推导。
+const derived = reactive<{ copBCH: number | null; copSCH: number | null }>({ copBCH: null, copSCH: null })
+
+const WATER_CP = 4.187
+const flows = computed(() => {
+    const qb = qrBCH.value, qs = qrSCH.value
+    const dtChw = controlForm.delta_t_chw || 5
+    const dtCw = controlForm.delta_t_cw || 5
+    const chw = (q: number) => (dtChw ? q / (WATER_CP * dtChw) : 0)
+    const cw = (q: number, cop: number | null) =>
+        dtCw && cop ? (q * (1 + 1 / cop)) / (WATER_CP * dtCw) : 0
+    return {
+        chwBCH: chw(qb), chwSCH: chw(qs),
+        cwBCH: cw(qb, derived.copBCH), cwSCH: cw(qs, derived.copSCH),
+    }
+})
+
+const copText = (v: number | null) => (v ? v.toFixed(4) : '计算中…')
+const flowText = (v: number) => (v ? v.toFixed(2) : '—')
+
+async function refreshDerived() {
+    try {
+        const { data } = await api.post('/design/derive', {
+            ts_chw_design: equipmentForm.ts_chw_design,
+            tr_chw_design: equipmentForm.tr_chw_design,
+            tr_cw_design: equipmentForm.tr_cw_design,
+            ts_cw_design: equipmentForm.ts_cw_design,
+            capacity_factor: equipmentForm.capacity_factor,
+            delta_t_chw: controlForm.delta_t_chw,
+            delta_t_cw: controlForm.delta_t_cw,
+        })
+        derived.copBCH = data?.BCH?.cop ?? null
+        derived.copSCH = data?.SCH?.cop ?? null
+    } catch {
+        derived.copBCH = null
+        derived.copSCH = null
+    }
+}
+
+onMounted(() => { void refreshDerived() })
+watch(
+    () => [equipmentForm.ts_chw_design, equipmentForm.tr_chw_design,
+           equipmentForm.tr_cw_design, equipmentForm.ts_cw_design,
+           equipmentForm.capacity_factor, controlForm.delta_t_chw,
+           controlForm.delta_t_cw],
+    () => { void refreshDerived() }
+)
+
+// 加机序列由容量与台数派生，避免与选型脱节（后端同样会校验一致性）
+const qrListText = computed(() => `${MODEL_QR_SCH.toFixed(1)}, ${MODEL_QR_BCH.toFixed(1)}`)
+const nDesignListText = computed(() =>
+    `${equipmentForm.n_design_SCH}, ${equipmentForm.n_design_BCH}`)
 
 // ===== 单位面积冷负荷 (W/m²) =====
 const unitLoad = computed(() => {
@@ -795,14 +900,14 @@ const unitLoad = computed(() => {
 const chillerTableData = computed(() => [
     {
         name: '大冷机',
-        ratedCapacity: equipmentForm.Qr_chiller_BCH,
-        cop: equipmentForm.COP_chiller_BCH,
+        ratedCapacity: qrBCH.value,
+        cop: derived.copBCH || 0,
         count: equipmentForm.n_design_BCH
     },
     {
         name: '小冷机',
-        ratedCapacity: equipmentForm.Qr_chiller_SCH,
-        cop: equipmentForm.COP_chiller_SCH,
+        ratedCapacity: qrSCH.value,
+        cop: derived.copSCH || 0,
         count: equipmentForm.n_design_SCH
     }
 ])
@@ -812,13 +917,13 @@ const pumpChwTableData = computed(() => [
     {
         name: '大冷冻泵',
         head: equipmentForm.Hr_pump_chw_BCH,
-        flow: equipmentForm.Gr_pump_chw_BCH,
+        flow: flows.value.chwBCH,
         count: equipmentForm.n_pump_chw_BCH
     },
     {
         name: '小冷冻泵',
         head: equipmentForm.Hr_pump_chw_SCH,
-        flow: equipmentForm.Gr_pump_chw_SCH,
+        flow: flows.value.chwSCH,
         count: equipmentForm.n_pump_chw_SCH
     }
 ])
@@ -828,13 +933,13 @@ const pumpCwTableData = computed(() => [
     {
         name: '大冷却泵',
         head: equipmentForm.Hr_pump_cw_BCH,
-        flow: equipmentForm.Gr_pump_cw_BCH,
+        flow: flows.value.cwBCH,
         count: equipmentForm.n_pump_cw_BCH
     },
     {
         name: '小冷却泵',
         head: equipmentForm.Hr_pump_cw_SCH,
-        flow: equipmentForm.Gr_pump_cw_SCH,
+        flow: flows.value.cwSCH,
         count: equipmentForm.n_pump_cw_SCH
     }
 ])
@@ -843,14 +948,14 @@ const pumpCwTableData = computed(() => [
 const towerTableData = computed(() => [
     {
         name: '大冷却塔',
-        flow: equipmentForm.Gr_tower_BCH,
+        flow: flows.value.cwBCH,
         power: equipmentForm.Pr_tower_BCH,
         pressure: equipmentForm.Hs_tower_BCH,
         count: equipmentForm.n_tower_BCH
     },
     {
         name: '小冷却塔',
-        flow: equipmentForm.Gr_tower_SCH,
+        flow: flows.value.cwSCH,
         power: equipmentForm.Pr_tower_SCH,
         pressure: equipmentForm.Hs_tower_SCH,
         count: equipmentForm.n_tower_SCH
@@ -891,8 +996,22 @@ const nextStep = () => {
             ElMessage.warning('请选择建筑类型')
             return
         }
+        if (!Number(projectForm.area) || Number(projectForm.area) <= 0) {
+            ElMessage.warning('请输入建筑空调面积（m²），必须大于 0')
+            return
+        }
         if (!dataConfirmed.value) {
             ElMessage.warning('请先上传并确认数据文件')
+            return
+        }
+    }
+    if (activeStep.value === 1) {
+        if (!Number(equipmentForm.load_building_r) || Number(equipmentForm.load_building_r) <= 0) {
+            ElMessage.warning('请输入建筑负荷（kW），必须大于 0')
+            return
+        }
+        if (!Number(equipmentForm.capacity_factor) || Number(equipmentForm.capacity_factor) <= 0) {
+            ElMessage.warning('请输入冷机容量放大系数，必须大于 0')
             return
         }
     }
@@ -907,6 +1026,14 @@ const prevStep = () => {
 const startSimulation = async () => {
     if (!parsedData.value) {
         ElMessage.warning('请先上传数据')
+        return
+    }
+    if (!Number(equipmentForm.load_building_r) || Number(equipmentForm.load_building_r) <= 0) {
+        ElMessage.warning('请输入建筑负荷（kW），必须大于 0')
+        return
+    }
+    if (!Number(equipmentForm.capacity_factor) || Number(equipmentForm.capacity_factor) <= 0) {
+        ElMessage.warning('请输入冷机容量放大系数，必须大于 0')
         return
     }
 
@@ -947,57 +1074,43 @@ const startSimulation = async () => {
     simulating.value = true
 
     try {
-        // 解析 Qr_list 和 n_design_list
-        const Qr_list = controlForm.Qr_list_str
-            .split(',')
-            .map(s => parseFloat(s.trim()))
-            .filter(n => !isNaN(n))
-
-        const n_design_list = controlForm.n_design_list_str
-            .split(',')
-            .map(s => parseInt(s.trim()))
-            .filter(n => !isNaN(n))
+        // Qr_list / n_design_list 均为派生值：容量取基准口径，台数取自选型，
+        // 两者必须一致（后端会校验，不一致直接 422）
+        const Qr_list = [MODEL_QR_SCH, MODEL_QR_BCH]
+        const n_design_list = [equipmentForm.n_design_SCH, equipmentForm.n_design_BCH]
 
         // ===== 构建完整配置 =====
         const config = {
             // 设备选型参数
             load_building_r: equipmentForm.load_building_r,
-            load_coe: equipmentForm.load_coe,
+            capacity_factor: equipmentForm.capacity_factor,
 
-            // 冷机参数
-            Qr_chiller_BCH: equipmentForm.Qr_chiller_BCH,
+            // 冷机参数（基准容量，实际容量由 capacity_factor 放大）
+            Qr_chiller_BCH: MODEL_QR_BCH,
             n_design_BCH: equipmentForm.n_design_BCH,
-            COP_chiller_BCH: equipmentForm.COP_chiller_BCH,
-            Qr_chiller_SCH: equipmentForm.Qr_chiller_SCH,
+            Qr_chiller_SCH: MODEL_QR_SCH,
             n_design_SCH: equipmentForm.n_design_SCH,
-            COP_chiller_SCH: equipmentForm.COP_chiller_SCH,
             ts_chw_design: equipmentForm.ts_chw_design,
             tr_chw_design: equipmentForm.tr_chw_design,
             tr_cw_design: equipmentForm.tr_cw_design,
             ts_cw_design: equipmentForm.ts_cw_design,
 
             // 冷冻泵参数
-            Gr_pump_chw_BCH: equipmentForm.Gr_pump_chw_BCH,
             Hr_pump_chw_BCH: equipmentForm.Hr_pump_chw_BCH,
             n_pump_chw_BCH: equipmentForm.n_pump_chw_BCH,
-            Gr_pump_chw_SCH: equipmentForm.Gr_pump_chw_SCH,
             Hr_pump_chw_SCH: equipmentForm.Hr_pump_chw_SCH,
             n_pump_chw_SCH: equipmentForm.n_pump_chw_SCH,
 
             // 冷却泵参数
-            Gr_pump_cw_BCH: equipmentForm.Gr_pump_cw_BCH,
             Hr_pump_cw_BCH: equipmentForm.Hr_pump_cw_BCH,
             n_pump_cw_BCH: equipmentForm.n_pump_cw_BCH,
-            Gr_pump_cw_SCH: equipmentForm.Gr_pump_cw_SCH,
             Hr_pump_cw_SCH: equipmentForm.Hr_pump_cw_SCH,
             n_pump_cw_SCH: equipmentForm.n_pump_cw_SCH,
 
             // 冷却塔参数
-            Gr_tower_BCH: equipmentForm.Gr_tower_BCH,
             Pr_tower_BCH: equipmentForm.Pr_tower_BCH,
             Hs_tower_BCH: equipmentForm.Hs_tower_BCH,
             n_tower_BCH: equipmentForm.n_tower_BCH,
-            Gr_tower_SCH: equipmentForm.Gr_tower_SCH,
             Pr_tower_SCH: equipmentForm.Pr_tower_SCH,
             Hs_tower_SCH: equipmentForm.Hs_tower_SCH,
             n_tower_SCH: equipmentForm.n_tower_SCH,
@@ -1102,6 +1215,19 @@ const getBuildingTypeLabel = (type: string) => {
 .step-content {
     padding: 20px 0;
     min-height: 500px;
+    width: 100%;
+}
+
+/* Step 1：输入框、下拉、数字框与上传区统一占满内容宽度，
+   右端与项目名称输入框对齐，避免上传拖拽区固定宽度造成错位 */
+.step-content :deep(.el-form-item__content) {
+    width: 100%;
+}
+
+.step-content :deep(.el-form-item__content > .el-input),
+.step-content :deep(.el-form-item__content > .el-select),
+.step-content :deep(.el-form-item__content > .el-input-number),
+.step-content :deep(.el-form-item__content > .data-uploader) {
     width: 100%;
 }
 
