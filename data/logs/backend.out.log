@@ -1,31 +1,244 @@
 算法路径: D:\BaiduNetdiskWorkspace\github-project\HVAC-DT-EnergySim\src\apiserver\app\services\../../..\algorithm
 ✅ 算法模块导入成功
 ✅ 冷站仿真算法初始化完成
-📦 一次性回填（v2）：6 条历史任务关联到 3 个项目（新建 2 个）
-🗄️ 持久化就绪: 迁移=[2] 新增账户=0 中断任务=0 报告索引扫描=19 补录=0 缺失产物=0
-INFO:     127.0.0.1:62572 - "OPTIONS /api/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60902 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60902 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62572 - "GET /api/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "GET /api/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "OPTIONS /api/projects/2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "DELETE /api/projects/2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "GET /api/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "OPTIONS /api/projects/3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "DELETE /api/projects/3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "GET /api/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "OPTIONS /api/projects/1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "GET /api/projects/1 HTTP/1.1" 200 OK
+🗄️ 持久化就绪: 迁移=无 新增账户=0 中断任务=0 报告索引扫描=19 补录=0 缺失产物=0
+INFO:     127.0.0.1:62348 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56759 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56759 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56759 - "GET /api/projects HTTP/1.1" 200 OK
 🔗 WebSocket 连接请求: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
 ✅ WebSocket 已接受: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
 📝 WebSocket 注册成功: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 当前连接数: 1
 📝 WebSocket 已注册: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
 📤 已发送连接确认: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
-INFO:     127.0.0.1:51021 - "OPTIONS /api/simulate/status/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "GET /api/simulate/status/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "OPTIONS /api/simulate/results/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51021 - "GET /api/simulate/results/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53805 - "GET /api/simulate/status/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53805 - "GET /api/simulate/results/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63910 - "OPTIONS /api/simulate/restart/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63910 - "POST /api/simulate/restart/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: started
+🔄 开始执行仿真任务: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 数据行数=8760, 面积=100000.0 m²
+检测到列: 时间=datetime, 负荷=load, 温度=t_dry, 含湿量=d
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
 ⚠️ WebSocket 断开: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
 📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 剩余连接数: 0
 📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
-INFO:     127.0.0.1:55032 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63910 - "GET /api/projects HTTP/1.1" 200 OK
+⚠️ WebSocket 连接不存在: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+⚠️ WebSocket 连接不存在: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+仿真进度: 10 周 / 1632 小时
+⚠️ WebSocket 连接不存在: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+⚠️ WebSocket 连接不存在: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+⚠️ WebSocket 连接不存在: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+🔗 WebSocket 连接请求: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+✅ WebSocket 已接受: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 注册成功: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 当前连接数: 1
+📝 WebSocket 已注册: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📤 已发送连接确认: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+仿真进度: 20 周 / 3312 小时
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+INFO:     127.0.0.1:60548 - "GET /api/projects HTTP/1.1" 200 OK
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+INFO:     127.0.0.1:60548 - "GET /api/projects/1 HTTP/1.1" 200 OK
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+🔗 WebSocket 连接请求: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+✅ WebSocket 已接受: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 注册成功: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 当前连接数: 1
+📝 WebSocket 已注册: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📤 已发送连接确认: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+INFO:     127.0.0.1:60548 - "GET /api/simulate/status/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+仿真进度: 30 周 / 4992 小时
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+仿真进度: 40 周 / 6672 小时
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+仿真进度: 50 周 / 8352 小时
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: progress
+仿真完成: 小时数=8760, 总能耗=1719481.15 kWh, 总供冷量=8609770.62 kWh, 系统能效=5.01
+📤 发送 WebSocket 消息到 19e31250-9513-48e2-b3b5-25c1a1f5b04b: completed
+✅ 仿真任务 19e31250-9513-48e2-b3b5-25c1a1f5b04b 完成
+INFO:     127.0.0.1:58353 - "GET /api/simulate/results/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+⚠️ WebSocket 断开: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 剩余连接数: 0
+📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+INFO:     127.0.0.1:64227 - "OPTIONS /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64227 - "GET /api/projects HTTP/1.1" 200 OK
+🔗 WebSocket 连接请求: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+✅ WebSocket 已接受: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 注册成功: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 当前连接数: 1
+📝 WebSocket 已注册: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📤 已发送连接确认: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+INFO:     127.0.0.1:65522 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65522 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58994 - "OPTIONS /api/design/derive HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58994 - "POST /api/design/derive HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50303 - "OPTIONS /api/simulate/start HTTP/1.1" 200 OK
+🚀 创建仿真任务: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+INFO:     127.0.0.1:50303 - "POST /api/simulate/start HTTP/1.1" 200 OK
+⚠️ WebSocket 连接不存在: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+🔄 开始执行仿真任务: 612bc69d-15e2-4be0-a051-8d3a45c376f1, 数据行数=8760, 面积=100000.0 m²
+检测到列: 时间=datetime, 负荷=load, 温度=t_dry, 含湿量=d
+INFO:     127.0.0.1:50303 - "OPTIONS /api/simulate/status/612bc69d-15e2-4be0-a051-8d3a45c376f1 HTTP/1.1" 200 OK
+🔗 WebSocket 连接请求: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+✅ WebSocket 已接受: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+📝 WebSocket 注册成功: 612bc69d-15e2-4be0-a051-8d3a45c376f1, 当前连接数: 2
+📝 WebSocket 已注册: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+📤 已发送连接确认: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+INFO:     127.0.0.1:50303 - "GET /api/simulate/status/612bc69d-15e2-4be0-a051-8d3a45c376f1 HTTP/1.1" 200 OK
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+仿真进度: 10 周 / 1632 小时
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+仿真进度: 20 周 / 3312 小时
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+仿真进度: 30 周 / 4992 小时
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+仿真进度: 40 周 / 6672 小时
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+仿真进度: 50 周 / 8352 小时
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: progress
+仿真完成: 小时数=8760, 总能耗=1719481.15 kWh, 总供冷量=8609770.62 kWh, 系统能效=5.01
+📤 发送 WebSocket 消息到 612bc69d-15e2-4be0-a051-8d3a45c376f1: completed
+✅ 仿真任务 612bc69d-15e2-4be0-a051-8d3a45c376f1 完成
+INFO:     127.0.0.1:50637 - "OPTIONS /api/simulate/results/612bc69d-15e2-4be0-a051-8d3a45c376f1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50637 - "GET /api/simulate/results/612bc69d-15e2-4be0-a051-8d3a45c376f1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56409 - "OPTIONS /api/reports/generate/612bc69d-15e2-4be0-a051-8d3a45c376f1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56409 - "POST /api/reports/generate/612bc69d-15e2-4be0-a051-8d3a45c376f1 HTTP/1.1" 200 OK
+⚠️ WebSocket 断开: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+📝 WebSocket 已注销: 612bc69d-15e2-4be0-a051-8d3a45c376f1, 剩余连接数: 1
+📝 WebSocket 已注销: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+INFO:     127.0.0.1:56409 - "OPTIONS /api/reports/612bc69d-20261107171850 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56409 - "GET /api/reports/612bc69d-20261107171850 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56409 - "OPTIONS /api/reports/download/612bc69d-20261107171850 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56409 - "GET /api/reports/download/612bc69d-20261107171850 HTTP/1.1" 200 OK
+🔗 WebSocket 连接请求: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+✅ WebSocket 已接受: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+📝 WebSocket 注册成功: 612bc69d-15e2-4be0-a051-8d3a45c376f1, 当前连接数: 2
+📝 WebSocket 已注册: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+📤 已发送连接确认: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+INFO:     127.0.0.1:51090 - "GET /api/projects HTTP/1.1" 200 OK
+⚠️ WebSocket 断开: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+📝 WebSocket 已注销: 612bc69d-15e2-4be0-a051-8d3a45c376f1, 剩余连接数: 1
+📝 WebSocket 已注销: 612bc69d-15e2-4be0-a051-8d3a45c376f1
+⚠️ WebSocket 断开: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 剩余连接数: 0
+📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+⚠️ WebSocket 断开: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+INFO:     127.0.0.1:56818 - "OPTIONS /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57495 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57495 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56818 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56818 - "GET /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56818 - "OPTIONS /api/projects/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56818 - "GET /api/projects/1 HTTP/1.1" 200 OK
+🔗 WebSocket 连接请求: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+✅ WebSocket 已接受: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 注册成功: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 当前连接数: 1
+📝 WebSocket 已注册: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📤 已发送连接确认: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+INFO:     127.0.0.1:51467 - "OPTIONS /api/simulate/status/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51467 - "GET /api/simulate/status/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51467 - "OPTIONS /api/simulate/results/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51467 - "GET /api/simulate/results/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51467 - "OPTIONS /api/reports/generate/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51467 - "POST /api/reports/generate/19e31250-9513-48e2-b3b5-25c1a1f5b04b HTTP/1.1" 200 OK
+⚠️ WebSocket 断开: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 剩余连接数: 0
+📝 WebSocket 已注销: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+INFO:     127.0.0.1:51467 - "OPTIONS /api/reports/19e31250-20261107173139 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51467 - "GET /api/reports/19e31250-20261107173139 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51467 - "OPTIONS /api/reports/download/19e31250-20261107173139 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51467 - "GET /api/reports/download/19e31250-20261107173139 HTTP/1.1" 200 OK
+🔗 WebSocket 连接请求: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+✅ WebSocket 已接受: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📝 WebSocket 注册成功: 19e31250-9513-48e2-b3b5-25c1a1f5b04b, 当前连接数: 1
+📝 WebSocket 已注册: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+📤 已发送连接确认: 19e31250-9513-48e2-b3b5-25c1a1f5b04b
+INFO:     127.0.0.1:60157 - "OPTIONS /api/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60157 - "GET /api/projects HTTP/1.1" 200 OK

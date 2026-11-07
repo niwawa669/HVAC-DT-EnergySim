@@ -1,10 +1,28 @@
-INFO:     Started server process [45112]
+INFO:     Started server process [32844]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     ('127.0.0.1', 51091) - "WebSocket /ws/simulate/19e31250-9513-48e2-b3b5-25c1a1f5b04b" [accepted]
+INFO:     ('127.0.0.1', 51096) - "WebSocket /ws/simulate/19e31250-9513-48e2-b3b5-25c1a1f5b04b" [accepted]
 INFO:     connection open
 INFO:     connection closed
-INFO:     ('127.0.0.1', 61539) - "WebSocket /ws/simulate/19e31250-9513-48e2-b3b5-25c1a1f5b04b" [accepted]
+INFO:     ('127.0.0.1', 57503) - "WebSocket /ws/simulate/19e31250-9513-48e2-b3b5-25c1a1f5b04b" [accepted]
+INFO:     connection open
+INFO:     ('127.0.0.1', 59153) - "WebSocket /ws/simulate/19e31250-9513-48e2-b3b5-25c1a1f5b04b" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ('127.0.0.1', 51059) - "WebSocket /ws/simulate/19e31250-9513-48e2-b3b5-25c1a1f5b04b" [accepted]
+INFO:     connection open
+INFO:     ('127.0.0.1', 64106) - "WebSocket /ws/simulate/612bc69d-15e2-4be0-a051-8d3a45c376f1" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ('127.0.0.1', 61094) - "WebSocket /ws/simulate/612bc69d-15e2-4be0-a051-8d3a45c376f1" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     ('127.0.0.1', 51115) - "WebSocket /ws/simulate/19e31250-9513-48e2-b3b5-25c1a1f5b04b" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ('127.0.0.1', 51869) - "WebSocket /ws/simulate/19e31250-9513-48e2-b3b5-25c1a1f5b04b" [accepted]
 INFO:     connection open
 INFO:     connection closed
